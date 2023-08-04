@@ -1,0 +1,1036 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>Unsafe Rust的单向链表实现 | 乱up廿四</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://LyntNy4n.github.io/favicon.ico?v=1691120291339">
+<link rel="stylesheet" href="https://LyntNy4n.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1CGSPF718Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CGSPF718Q');
+</script>
+
+
+    <meta name="description" content="早知道,还是std::collections::LinkedList!
+
+本文部分使用了chatgpt辅助,所以如果有错,不全是我的锅(
+Safe Rust的批判
+总所周知,Rust的卖点就是所有权,借用检查,生命周期等等,但是这些特性在实..." />
+    <meta name="keywords" content="Rust" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://LyntNy4n.github.io">
+        <img src="https://LyntNy4n.github.io/images/avatar.png?v=1691120291339" class="site-logo">
+        <h1 class="site-title">乱up廿四</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/LyntNy4n" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      LyntNy4n的垃圾场
+    </div>
+    <div class="site-footer">
+      114514 1919810 | <a class="rss" href="https://LyntNy4n.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">Unsafe Rust的单向链表实现</h2>
+            <div class="post-date">2023-03-15</div>
+            
+            <div class="post-content" v-pre>
+              <p>早知道,还是std::collections::LinkedList!</p>
+<!-- more -->
+<p>本文部分使用了chatgpt辅助,所以如果有错,不全是我的锅(</p>
+<h2 id="safe-rust的批判">Safe Rust的批判</h2>
+<p>总所周知,Rust的卖点就是所有权,借用检查,生命周期等等,但是这些特性在实现链表的时候会增添许多麻烦</p>
+<p>比如一个safe的定义:</p>
+<pre><code class="language-rust">pub struct Node&lt;T&gt; {
+    data: T,
+    next: Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;,
+}
+
+pub struct LinkedList&lt;T&gt; {
+    head: Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;,
+    len: usize,
+}
+</code></pre>
+<p>如果你只是<strong>独占</strong>地使用该定义的链表是没什么问题的,这里的独占指的就是只有一个东西拥有链表的所有权.比如常规的头插尾插,以及删改查都是可以的</p>
+<p>但如果你一旦要整点骚操作,safe rust就会开始刁难你了</p>
+<p>比如你想要<strong>同时</strong>使用双指针遍历,因为遍历需要把变量赋值到next以实现移动,所以你需要创建2个类型为<code>&amp;mut Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;</code>的变量. 同时使用多个可变引用在safe rust是不可能的,所以没门.你只能<strong>一个一个</strong>地使用可变引用遍历,也就是说可变引用的作用域不能重叠</p>
+<p>比如leetcode的一个链表题,要求你找出倒数前k个节点的值,在safe rust你只能先用一个可变引用算出链表的长度n,然后再用一个可变引用遍历到n-k的地方</p>
+<p>再有就是多个节点指向同一个节点的情况,在 Rust 中,每个 <code>Box</code> 对象都<strong>拥有唯一的所有权</strong>,也即是只能有一个指针指向它.因此,如果我们尝试将多个节点指向同一个节点,编译器将会报错,比如下面的布局</p>
+<pre><code>list1 -&gt; A ---+
+              |
+              v
+list2 ------&gt; C -&gt; D
+              ^
+              |
+list3 -&gt; B ---+
+</code></pre>
+<p>用上面的定义创建就会报错</p>
+<p>这时候网上教程会建议你使用<code>Option&lt;Rc&lt;Node&lt;T&gt;&gt;</code>来实现多个节点之间共享数据的情况, <code>Rc</code> 代表引用计数</p>
+<p>你可能会想,为什么不用<code>&amp;Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;</code>呢?</p>
+<blockquote>
+<p><code>Rc</code> 和 <code>&amp;Box</code> 都将底层数据存储在堆上,都不能跨线程发送,并且都是不可变共享.然而,最大的区别是 <code>Rc</code> 给你一个共享的（不可变的）<strong>拥有所有权</strong>的值,而 <code>&amp;Box</code> 你得到一个共享的（不可变的）<strong>引用</strong></p>
+<p>在 <code>Rc</code> (引用计数)的情况下,<strong>只有最后一个所有者</strong>被删除,底层数据才会被删除(不然只删除智能指针并减少引用计数)</p>
+<p>然而, <code>&amp;Box</code> 只会有一个所有者,在所有者离开范围后,对它的任何共享引用都将立即失效.</p>
+<p>https://stackoverflow.com/questions/49377231/when-to-use-rc-vs-box</p>
+</blockquote>
+<p>所以 <code>&amp;Box</code> 没法保证共享引用是有效的,当然,这个问题会在编译期就暴露出来,懂不懂生命周期的威力啊?(</p>
+<p>再有, <code>&amp;Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;</code>这个类型和<code>Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;</code>是不一样的,你链表里没法填上去</p>
+<p>那把链表定义也改了呢?你就会发现还需要标注生命周期,就像这样:</p>
+<pre><code class="language-rust">pub struct Node&lt;'a, T&gt; {
+    data: T,
+    next: &amp;'a Option&lt;Box&lt;Node&lt;'a, T&gt;&gt;&gt;,
+}
+
+pub struct LinkedList&lt;'a, T&gt; {
+    head: &amp;'a Option&lt;Box&lt;Node&lt;'a, T&gt;&gt;&gt;,
+    len: usize,
+}
+</code></pre>
+<p>好歹编译器没意见了,但其实这也是个巨坑.使用 <code>&amp;Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;</code> 会将指针放在栈上,而节点数据仍然存储在堆上,这意味着我们需要手动管理节点的生命周期和内存分配,标生命周期就能整得脑溢血.其次, <code>&amp;Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;</code> 只能使用引用语义而不能使用值语义,有事没事就得解引用<code>*</code>,而且如果想可变又得改成<code>&amp;mut Option&lt;Box&lt;Node&lt;T&gt;&gt;&gt;</code>, 又有一堆问题. 虽然<code>Rc</code>也不能可变(</p>
+<p>safe rust最后会变成这样:</p>
+<pre><code class="language-rust">use std::rc::Rc;
+use std::cell::RefCell;
+
+pub struct Node&lt;T&gt; {
+    data: T,
+    next: Option&lt;Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt;,
+}
+
+pub struct LinkedList&lt;T&gt; {
+    head: Option&lt;Rc&lt;RefCell&lt;Node&lt;T&gt;&gt;&gt;&gt;,
+    size: usize,
+}
+</code></pre>
+<p>在这里,使用 <code>Rc</code> 类型来实现多个节点之间共享数据,使用 <code>RefCell</code> 类型来提供内部可变性</p>
+<p>这样我们就可以在不使用可变引用的情况下修改节点的值了:</p>
+<pre><code class="language-rust">let node = Rc::new(RefCell::new(Node { data: 42, next: None }));
+node.borrow_mut().data = 100;
+</code></pre>
+<p>虽然但是,用了<code>Rc</code>和 <code>RefCell</code> 并不意味着你就摆脱了safe rust的种种限制了,比如所有权,你仍然不能同时拥有多个可变引用.虽然现在编译期不会报错了,但是会延后到运行期(</p>
+<p>G!</p>
+<p>所以说了这么多,结论就是:safe rust没有办法处理同时拥有多个可变引用的问题,而且涉及多个节点指向同一个节点的情况会很麻烦(如果是循环引用,<code>Rc</code>还不足以解决问题,还需要一个<code>Weak</code>指针)</p>
+<h2 id="unsafe-rust的单向链表实现">Unsafe Rust的单向链表实现</h2>
+<h3 id="基本定义和实现">基本定义和实现</h3>
+<p>所以链表还是得用裸指针定义:</p>
+<pre><code class="language-rust">use std::ptr;
+
+pub struct LinkedList&lt;T&gt; {
+    len: usize,
+    head: *mut Node&lt;T&gt;,
+    tail: *mut Node&lt;T&gt;,
+}
+
+pub struct Node&lt;T&gt; {
+    data: T,
+    next: *mut Node&lt;T&gt;,
+}
+</code></pre>
+<p>全用可变裸指针,就像C一样(</p>
+<p>PS. 不要一些用裸指针,一些不用.要用就全用.</p>
+<blockquote>
+<p>将安全的指针 <code>&amp;</code> 、<code>&amp;mut</code> 和 <code>Box</code> 跟不安全的裸指针 <code>*mut</code> 和 <code>*const</code> 混用是 UB 的根源之一,原因是安全指针会引入额外的约束,但是裸指针并不会遵守这些约束</p>
+<p>https://rust-unofficial.github.io/too-many-lists/fifth-layout-basics-redux.html</p>
+</blockquote>
+<p>这里的链表有头和尾指针,而且没有虚拟节点(dummy node).虽然有虚拟节点可以不用管一些边界条件,但是Rust没有办法设置虚拟节点的值(除非你规定T有一个默认值).<code>data</code>改用<code>Option&lt;T&gt;</code>可以解决这个问题,但是代价是基本全部代码都要处理Some和None的情况,巨麻烦</p>
+<p><code>Node</code>的方法实现:</p>
+<pre><code class="language-rust">impl&lt;T&gt; Node&lt;T&gt; {
+    pub fn new(data: T) -&gt; Node&lt;T&gt; {
+        Node {
+            data,
+            next: ptr::null_mut(),
+        }
+    }
+}
+</code></pre>
+<p>然后是链表本体,首先来点简单的:</p>
+<pre><code class="language-rust">impl&lt;T&gt; LinkedList&lt;T&gt; { //后面有关LinkedList&lt;T&gt;的方法不再用impl块包着,不然太麻烦
+	pub fn new() -&gt; LinkedList&lt;T&gt; {
+        LinkedList {
+            len: 0,
+            head: ptr::null_mut(),
+            tail: ptr::null_mut(),
+        }
+    }
+    pub fn is_empty(&amp;self) -&gt; bool {
+        self.len == 0
+    }
+    pub fn len(&amp;self) -&gt; usize {
+        self.len
+    }
+}
+</code></pre>
+<p>然后是头插和尾插:</p>
+<pre><code class="language-rust"> 	pub fn push_front(&amp;mut self, data: T) {
+        let mut new_node = Box::into_raw(Box::new(Node::new(data)));
+        if self.is_empty() {
+            self.tail = new_node;
+        } else {
+            unsafe {
+                (*new_node).next = self.head;
+            }
+        }
+        self.head = new_node;
+        self.len += 1;
+    }
+    pub fn push_back(&amp;mut self, data: T) {
+        let new_node = Box::into_raw(Box::new(Node::new(data)));
+        if self.is_empty() {
+            self.head = new_node;
+        } else {
+            unsafe {
+                (*self.tail).next = new_node;
+            }
+        }
+        self.tail = new_node;
+        self.len += 1;
+    }
+</code></pre>
+<p>第2行创建新节点,rust可以用<code>std::alloc::alloc</code>来申请内存,就像C的<code>malloc</code>或者C++的<code>new</code>,但有更舒服的方法</p>
+<blockquote>
+<pre><code>pub fn into_raw(b: Box&lt;T&gt;) -&gt; *mut T
+</code></pre>
+<p>消费掉 <code>Box</code> (拿走所有权),返回一个裸指针.该指针会被正确的对齐且不为 null</p>
+<p>在调用该函数后,调用者需要对之前被 Box 所管理的内存负责,特别地,调用者需要正确的清理 <code>T</code> 并释放相应的内存.最简单的方式是通过 <code>Box::from_raw</code> 函数将裸指针再转回到 <code>Box</code>,然后 <code>Box</code> 的析构器就可以自动执行清理了.</p>
+</blockquote>
+<p>所以我们先用 <code>Box::new()</code> 申请内存,把node放进去,然后再转成裸指针形式</p>
+<p>中间有一些边界处理,没用虚拟节点是这样的.其他部分和C/C++差不多</p>
+<p>头删和尾删:</p>
+<pre><code class="language-rust">    pub fn pop_front(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.is_empty() {
+            return None;
+        }
+        let old_head = self.head;
+        unsafe {
+            self.head = (*self.head).next;
+        }
+        self.len -= 1;
+        if self.is_empty() {
+            self.tail = ptr::null_mut();
+        }
+        Some(unsafe { Box::from_raw(old_head).data })
+    }
+    pub fn pop_back(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.is_empty() {
+            return None;
+        }
+        let mut curr = self.head;
+        let mut prev = ptr::null_mut();
+        // let curr go to the end of the list
+        // and prev go to the node before curr
+        while unsafe { !(*curr).next.is_null() } {
+            prev = curr;
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        self.tail = prev;
+        // if prev is null, it means that curr is the only node in the list
+        if prev.is_null() {
+            self.head = ptr::null_mut();
+        } else {
+            unsafe {
+                (*prev).next = ptr::null_mut();
+            }
+        }
+        self.len -= 1;
+        Some(unsafe { Box::from_raw(curr).data })
+    }
+</code></pre>
+<p>13行,因为pop返回T本身,所有权会交出去,那谁管理T的内存?还是得交给<code>Box</code></p>
+<p>如果你写<code>Some(unsafe { (*old_head).data })</code>,编译器不让你把data移出去,因为没人管理内存了,除非你clone一份</p>
+<p>19-28行,也只有unsafe rust能做这种操作</p>
+<p>然后是获得引用的一些方法:</p>
+<pre><code class="language-rust">    pub fn peek_front(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.is_empty() {
+            return None;
+        }
+        Some(unsafe { &amp;(*self.head).data })
+    }
+    pub fn peek_back(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.is_empty() {
+            return None;
+        }
+        Some(unsafe { &amp;(*self.tail).data })
+    }
+    pub fn get(&amp;self, index: usize) -&gt; Option&lt;&amp;T&gt; {
+        if index &gt;= self.len {
+            return None;
+        }
+        let mut curr = self.head;
+        for _ in 0..index {
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        Some(unsafe { &amp;(*curr).data })
+    }
+    pub fn get_mut(&amp;mut self, index: usize) -&gt; Option&lt;&amp;mut T&gt; {
+        if index &gt;= self.len {
+            return None;
+        }
+        let mut curr = self.head;
+        for _ in 0..index {
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        Some(unsafe { &amp;mut (*curr).data })
+    }
+</code></pre>
+<p>这时候因为是返回引用,内存还是链表来管,所以就不用<code>Box::into_raw</code></p>
+<p>然后是往指定索引处插入/删除:</p>
+<pre><code class="language-rust">    pub fn insert_at(&amp;mut self, index: usize, data: T) -&gt; bool {
+        if index &gt; self.len {
+            return false;
+        }
+        // edge cases, because there is no dummy node
+        if index == 0 {
+            self.push_front(data);
+            return true;
+        }
+        if index == self.len {
+            self.push_back(data);
+            return true;
+        }
+
+        let mut curr = self.head;
+        let mut prev = ptr::null_mut();
+        for _ in 0..index {
+            prev = curr;
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        let new_node = Box::into_raw(Box::new(Node::new(data)));
+        unsafe {
+            (*prev).next = new_node;
+            (*new_node).next = curr;
+        }
+        self.len += 1;
+        true
+    }
+    pub fn remove_at(&amp;mut self, index: usize) -&gt; Option&lt;T&gt; {
+        if index &gt;= self.len {
+            return None;
+        }
+        // edge cases, because there is no dummy node
+        if index == 0 {
+            return self.pop_front();
+        }
+        if index == self.len - 1 {
+            return self.pop_back();
+        }
+
+        let mut curr = self.head;
+        let mut prev = ptr::null_mut();
+        for _ in 0..index {
+            prev = curr;
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        unsafe {
+            (*prev).next = (*curr).next;
+        }
+        self.len -= 1;
+        Some(unsafe { Box::from_raw(curr).data })
+    }
+</code></pre>
+<p>还是因为没有虚拟节点,多了很多if判断边界</p>
+<h4 id="drop的实现">Drop的实现</h4>
+<p>虽说rust会帮你释放内存,但是它是一层层调用<code>drop</code>去释放的,这导致在链表下,rust需要递归调用到最后一个节点才能去释放,是倒着释放的,这有可能会爆栈(rust不支持尾递归).而我们知道链表可以一直头删来实现释放,所以我们要自己实现drop</p>
+<pre><code class="language-rust">impl&lt;T&gt; Drop for LinkedList&lt;T&gt; {
+    fn drop(&amp;mut self) {
+        while let Some(_) = self.pop_front() {}
+    }
+}
+</code></pre>
+<p>甚至不需要显式调用<code>drop()</code></p>
+<h3 id="花活实现迭代器">花活:实现迭代器</h3>
+<p>rust的迭代器也是一大特色,可以很舒服的处理集合中的元素.链表的遍历也可以实现为迭代器</p>
+<pre><code class="language-rust">pub struct IntoIter&lt;T&gt;(LinkedList&lt;T&gt;);
+impl&lt;T&gt; IntoIterator for LinkedList&lt;T&gt; {
+    type Item = T;
+    type IntoIter = IntoIter&lt;T&gt;;
+    fn into_iter(self) -&gt; Self::IntoIter {
+        IntoIter(self)
+    }
+}
+impl&lt;T&gt; Iterator for IntoIter&lt;T&gt; {
+    type Item = T;
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        self.0.pop_front()
+    }
+}
+</code></pre>
+<p><code>into_iter</code>需要所有权,最简单的方法就是用一个struct保住原来的</p>
+<pre><code class="language-rust">pub struct Iter&lt;'a, T&gt; {
+    next: Option&lt;&amp;'a Node&lt;T&gt;&gt;,
+}
+impl&lt;T&gt; LinkedList&lt;T&gt; {
+    pub fn iter(&amp;self) -&gt; Iter&lt;T&gt; {
+        unsafe {
+            Iter {
+                next: self.head.as_ref(),
+            }
+        }
+    }
+}
+impl&lt;'a, T&gt; Iterator for Iter&lt;'a, T&gt; {
+    type Item = &amp;'a T;
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        // map is used to convert the Option&lt;&amp;Node&lt;T&gt;&gt; to Option&lt;&amp;T&gt;, if the Option is None, it will return None
+        self.next.map(|node| {
+            self.next = unsafe { node.next.as_ref() };
+            &amp;node.data
+        })
+    }
+}
+
+pub struct IterMut&lt;'a, T&gt; {
+    next: Option&lt;&amp;'a mut Node&lt;T&gt;&gt;,
+}
+impl&lt;T&gt; LinkedList&lt;T&gt; {
+    pub fn iter_mut(&amp;mut self) -&gt; IterMut&lt;T&gt; {
+        unsafe {
+            IterMut {
+                next: self.head.as_mut(),
+            }
+        }
+    }
+}
+impl&lt;'a, T&gt; Iterator for IterMut&lt;'a, T&gt; {
+    type Item = &amp;'a mut T;
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        self.next.take().map(|node| {
+            self.next = unsafe { node.next.as_mut() };
+            &amp;mut node.data
+        })
+    }
+}
+</code></pre>
+<p>而<code>iter</code>和<code>iter_mut</code>只需要元素的引用,不需要拿到链表的所有权,所以我们这里只设置一个成员<code>next</code>,用来记录目前引用的元素,而且单靠next就可以移动到下一个节点</p>
+<p>这里需要生命周期标注,因为<code>Node</code>能活多久,其他的struct是不知道的.我们标注的意思就是告诉编译器:<code>Node</code>至少和其他struct活得一样久.也就是说其他struct能肯定自己的引用肯定有效</p>
+<p>结束!</p>
+<p>最后,链表其实用的不多,可惜有人就爱出这些题</p>
+<blockquote>
+<p>其次,我讨厌链表.链表真的是一种糟糕的数据结构,尽管它在部分场景下确实很有用：</p>
+<ul>
+<li>对列表进行大量的分割和合并操作</li>
+<li>无锁并发</li>
+<li>要实现内核或嵌入式的服务</li>
+<li>你在使用一个纯函数式语言,由于受限的语法和缺少可变性,因此你需要使用链表来解决这些问题</li>
+</ul>
+<p>但是实事求是的说,这些场景对于几乎任何 Rust 开发都是很少遇到的,99% 的场景你可以使用 <code>Vec</code> 来替代,然后 1% 中的 99% 可以使用 <code>VecDeque</code>. 由于它们具有更少的内存分配次数、更低的内存占用、随机访问和缓存亲和特性,因此能够适用于绝大多数工作场景.总之,类似于 <code>trie</code> 树,链表也是一种非常小众的数据结构,特别是对于 Rust 开发而言.</p>
+<p>https://course.rs/too-many-lists/do-we-need-it.html</p>
+<p>本书只是为了学习链表该如何实现,如果大家只是为了使用链表,强烈推荐直接使用标准库或者社区提供的现成实现,例如 <a href="https://doc.rust-lang.org/std/collections/struct.LinkedList.html">std::collections::LinkedList</a></p>
+</blockquote>
+<h3 id="全部代码以及测试用例">全部代码以及测试用例</h3>
+<pre><code class="language-rust">use std::ptr;
+
+#[derive(Debug)]
+pub struct LinkedList&lt;T&gt; {
+    len: usize,
+    head: *mut Node&lt;T&gt;,
+    tail: *mut Node&lt;T&gt;,
+}
+
+pub struct Node&lt;T&gt; {
+    data: T,
+    next: *mut Node&lt;T&gt;,
+}
+
+impl&lt;T&gt; Node&lt;T&gt; {
+    pub fn new(data: T) -&gt; Node&lt;T&gt; {
+        Node {
+            data,
+            next: ptr::null_mut(),
+        }
+    }
+}
+
+impl&lt;T&gt; LinkedList&lt;T&gt; {
+    pub fn new() -&gt; LinkedList&lt;T&gt; {
+        LinkedList {
+            len: 0,
+            head: ptr::null_mut(),
+            tail: ptr::null_mut(),
+        }
+    }
+    pub fn is_empty(&amp;self) -&gt; bool {
+        self.len == 0
+    }
+    pub fn len(&amp;self) -&gt; usize {
+        self.len
+    }
+    pub fn push_front(&amp;mut self, data: T) {
+        let mut new_node = Box::into_raw(Box::new(Node::new(data)));
+        if self.is_empty() {
+            self.tail = new_node;
+        } else {
+            unsafe {
+                (*new_node).next = self.head;
+            }
+        }
+        self.head = new_node;
+        self.len += 1;
+    }
+    pub fn push_back(&amp;mut self, data: T) {
+        let new_node = Box::into_raw(Box::new(Node::new(data)));
+        if self.is_empty() {
+            self.head = new_node;
+        } else {
+            unsafe {
+                (*self.tail).next = new_node;
+            }
+        }
+        self.tail = new_node;
+        self.len += 1;
+    }
+    pub fn pop_front(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.is_empty() {
+            return None;
+        }
+        let old_head = self.head;
+        unsafe {
+            self.head = (*self.head).next;
+        }
+        self.len -= 1;
+        if self.is_empty() {
+            self.tail = ptr::null_mut();
+        }
+        Some(unsafe { Box::from_raw(old_head).data })
+    }
+    pub fn pop_back(&amp;mut self) -&gt; Option&lt;T&gt; {
+        if self.is_empty() {
+            return None;
+        }
+        let mut curr = self.head;
+        let mut prev = ptr::null_mut();
+        // let curr go to the end of the list
+        // and prev go to the node before curr
+        while unsafe { !(*curr).next.is_null() } {
+            prev = curr;
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        self.tail = prev;
+        // if prev is null, it means that curr is the only node in the list
+        if prev.is_null() {
+            self.head = ptr::null_mut();
+        } else {
+            unsafe {
+                (*prev).next = ptr::null_mut();
+            }
+        }
+        self.len -= 1;
+        Some(unsafe { Box::from_raw(curr).data })
+    }
+    pub fn peek_front(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.is_empty() {
+            return None;
+        }
+        Some(unsafe { &amp;(*self.head).data })
+    }
+    pub fn peek_back(&amp;self) -&gt; Option&lt;&amp;T&gt; {
+        if self.is_empty() {
+            return None;
+        }
+        Some(unsafe { &amp;(*self.tail).data })
+    }
+    pub fn get(&amp;self, index: usize) -&gt; Option&lt;&amp;T&gt; {
+        if index &gt;= self.len {
+            return None;
+        }
+        let mut curr = self.head;
+        for _ in 0..index {
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        Some(unsafe { &amp;(*curr).data })
+    }
+    pub fn get_mut(&amp;mut self, index: usize) -&gt; Option&lt;&amp;mut T&gt; {
+        if index &gt;= self.len {
+            return None;
+        }
+        let mut curr = self.head;
+        for _ in 0..index {
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        Some(unsafe { &amp;mut (*curr).data })
+    }
+    pub fn insert_at(&amp;mut self, index: usize, data: T) -&gt; bool {
+        if index &gt; self.len {
+            return false;
+        }
+        // edge cases, because there is no dummy node
+        if index == 0 {
+            self.push_front(data);
+            return true;
+        }
+        if index == self.len {
+            self.push_back(data);
+            return true;
+        }
+
+        let mut curr = self.head;
+        let mut prev = ptr::null_mut();
+        for _ in 0..index {
+            prev = curr;
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        let new_node = Box::into_raw(Box::new(Node::new(data)));
+        unsafe {
+            (*prev).next = new_node;
+            (*new_node).next = curr;
+        }
+        self.len += 1;
+        true
+    }
+    pub fn remove_at(&amp;mut self, index: usize) -&gt; Option&lt;T&gt; {
+        if index &gt;= self.len {
+            return None;
+        }
+        // edge cases, because there is no dummy node
+        if index == 0 {
+            return self.pop_front();
+        }
+        if index == self.len - 1 {
+            return self.pop_back();
+        }
+
+        let mut curr = self.head;
+        let mut prev = ptr::null_mut();
+        for _ in 0..index {
+            prev = curr;
+            unsafe {
+                curr = (*curr).next;
+            }
+        }
+        unsafe {
+            (*prev).next = (*curr).next;
+        }
+        self.len -= 1;
+        Some(unsafe { Box::from_raw(curr).data })
+    }
+}
+
+impl&lt;T&gt; Drop for LinkedList&lt;T&gt; {
+    fn drop(&amp;mut self) {
+        while let Some(_) = self.pop_front() {}
+    }
+}
+
+// into_iter needs the ownership of the list, so we just wrap it in a struct
+pub struct IntoIter&lt;T&gt;(LinkedList&lt;T&gt;);
+impl&lt;T&gt; IntoIterator for LinkedList&lt;T&gt; {
+    type Item = T;
+    type IntoIter = IntoIter&lt;T&gt;;
+    fn into_iter(self) -&gt; Self::IntoIter {
+        IntoIter(self)
+    }
+}
+impl&lt;T&gt; Iterator for IntoIter&lt;T&gt; {
+    type Item = T;
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        self.0.pop_front()
+    }
+}
+
+//iter doesn't have ownership of the list, so we need &quot;next&quot; to record the next reference node
+pub struct Iter&lt;'a, T&gt; {
+    next: Option&lt;&amp;'a Node&lt;T&gt;&gt;,
+}
+impl&lt;T&gt; LinkedList&lt;T&gt; {
+    pub fn iter(&amp;self) -&gt; Iter&lt;T&gt; {
+        unsafe {
+            Iter {
+                next: self.head.as_ref(),
+            }
+        }
+    }
+}
+impl&lt;'a, T&gt; Iterator for Iter&lt;'a, T&gt; {
+    type Item = &amp;'a T;
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        // map is used to convert the Option&lt;&amp;Node&lt;T&gt;&gt; to Option&lt;&amp;T&gt;, if the Option is None, it will return None
+        self.next.map(|node| {
+            self.next = unsafe { node.next.as_ref() };
+            &amp;node.data
+        })
+    }
+}
+
+pub struct IterMut&lt;'a, T&gt; {
+    next: Option&lt;&amp;'a mut Node&lt;T&gt;&gt;,
+}
+impl&lt;T&gt; LinkedList&lt;T&gt; {
+    pub fn iter_mut(&amp;mut self) -&gt; IterMut&lt;T&gt; {
+        unsafe {
+            IterMut {
+                next: self.head.as_mut(),
+            }
+        }
+    }
+}
+impl&lt;'a, T&gt; Iterator for IterMut&lt;'a, T&gt; {
+    type Item = &amp;'a mut T;
+    fn next(&amp;mut self) -&gt; Option&lt;Self::Item&gt; {
+        self.next.take().map(|node| {
+            self.next = unsafe { node.next.as_mut() };
+            &amp;mut node.data
+        })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn test_push_front() {
+        let mut list = LinkedList::new();
+        list.push_front(1);
+        list.push_front(2);
+        list.push_front(3);
+        assert_eq!(list.len(), 3);
+        assert_eq!(list.peek_front(), Some(&amp;3));
+        assert_eq!(list.peek_back(), Some(&amp;1));
+    }
+
+    #[test]
+    fn test_push_back() {
+        let mut list = LinkedList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        assert_eq!(list.len(), 3);
+        assert_eq!(list.peek_front(), Some(&amp;1));
+        assert_eq!(list.peek_back(), Some(&amp;3));
+    }
+
+    #[test]
+    fn test_pop_front() {
+        let mut list = LinkedList::new();
+        list.push_front(1);
+        list.push_front(2);
+        list.push_front(3);
+        assert_eq!(list.pop_front(), Some(3));
+        assert_eq!(list.pop_front(), Some(2));
+        assert_eq!(list.pop_front(), Some(1));
+        assert_eq!(list.pop_front(), None);
+    }
+
+    #[test]
+    fn test_pop_back() {
+        let mut list = LinkedList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        assert_eq!(list.pop_back(), Some(3));
+        assert_eq!(list.pop_back(), Some(2));
+        assert_eq!(list.pop_back(), Some(1));
+        assert_eq!(list.pop_back(), None);
+    }
+
+    #[test]
+    fn test_peek_front() {
+        let mut list = LinkedList::new();
+        assert_eq!(list.peek_front(), None);
+        list.push_front(1);
+        list.push_front(2);
+        list.push_front(3);
+        assert_eq!(list.peek_front(), Some(&amp;3));
+    }
+
+    #[test]
+    fn test_peek_back() {
+        let mut list = LinkedList::new();
+        assert_eq!(list.peek_back(), None);
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        assert_eq!(list.peek_back(), Some(&amp;3));
+    }
+
+    #[test]
+    fn test_get() {
+        let mut list = LinkedList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        assert_eq!(list.get(0), Some(&amp;1));
+        assert_eq!(list.get(1), Some(&amp;2));
+        assert_eq!(list.get(2), Some(&amp;3));
+        assert_eq!(list.get(3), None);
+    }
+
+    #[test]
+    fn test_get_mut() {
+        let mut list = LinkedList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        assert_eq!(list.get_mut(0), Some(&amp;mut 1));
+        assert_eq!(list.get_mut(1), Some(&amp;mut 2));
+        assert_eq!(list.get_mut(2), Some(&amp;mut 3));
+        assert_eq!(list.get_mut(3), None);
+        if let Some(x) = list.get_mut(0) {
+            *x = 10;
+        }
+        assert_eq!(list.get(0), Some(&amp;10));
+    }
+
+    #[test]
+    fn test_insert_at() {
+        let mut list = LinkedList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        list.insert_at(0, 10);
+        assert_eq!(list.get(0), Some(&amp;10));
+        assert_eq!(list.get(1), Some(&amp;1));
+        assert_eq!(list.get(2), Some(&amp;2));
+        assert_eq!(list.get(3), Some(&amp;3));
+        list.insert_at(1, 20);
+        assert_eq!(list.get(0), Some(&amp;10));
+        assert_eq!(list.get(1), Some(&amp;20));
+        assert_eq!(list.get(2), Some(&amp;1));
+        assert_eq!(list.get(3), Some(&amp;2));
+        assert_eq!(list.get(4), Some(&amp;3));
+        list.insert_at(5, 30);
+        assert_eq!(list.get(0), Some(&amp;10));
+        assert_eq!(list.get(1), Some(&amp;20));
+        assert_eq!(list.get(2), Some(&amp;1));
+        assert_eq!(list.get(3), Some(&amp;2));
+        assert_eq!(list.get(4), Some(&amp;3));
+        assert_eq!(list.get(5), Some(&amp;30));
+    }
+
+    #[test]
+    fn test_remove_at() {
+        let mut list = LinkedList::new();
+        list.push_front(1);
+        list.push_front(2);
+        list.push_front(3);
+        list.push_front(4);
+        list.push_front(5);
+        //5 4 3 2 1
+        assert_eq!(list.remove_at(0), Some(5)); //4 3 2 1
+        assert_eq!(list.remove_at(1), Some(3)); //4 2 1
+        assert_eq!(list.remove_at(2), Some(1)); //4 2
+        assert_eq!(list.remove_at(3), None);
+    }
+
+    // test iterator
+    #[test]
+    fn test_iter() {
+        let mut list = LinkedList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        let mut iter = list.iter();
+        assert_eq!(iter.next(), Some(&amp;1));
+        assert_eq!(iter.next(), Some(&amp;2));
+        assert_eq!(iter.next(), Some(&amp;3));
+        assert_eq!(iter.next(), None);
+    }
+    #[test]
+    fn test_iter_mut() {
+        let mut list = LinkedList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        for x in list.iter_mut() {
+            *x += 1;
+        }
+        assert_eq!(list.get(0), Some(&amp;2));
+        assert_eq!(list.get(1), Some(&amp;3));
+        assert_eq!(list.get(2), Some(&amp;4));
+    }
+    #[test]
+    fn test_into_iter() {
+        let mut list = LinkedList::new();
+        list.push_back(1);
+        list.push_back(2);
+        list.push_back(3);
+        let mut iter = list.into_iter();
+        assert_eq!(iter.next(), Some(1));
+        assert_eq!(iter.next(), Some(2));
+        assert_eq!(iter.next(), Some(3));
+        assert_eq!(iter.next(), None);
+    }
+}
+</code></pre>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://LyntNy4n.github.io/tag/rust/" class="tag">
+                    Rust
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://LyntNy4n.github.io/post/mto/">
+                  <h3 class="post-title">
+                    进化多任务(EMT)和进化多目标(EMO)
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+  <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  <script>
+    hljs.initHighlightingOnLoad()
+  </script>
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '193da042420864465789',
+        clientSecret: '36e16db48c1d62042f8e44a5155cf49bef58caa0',
+        repo: 'LyntNy4n.github.io',
+        owner: 'LyntNy4n',
+        admin: ['LyntNy4n'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

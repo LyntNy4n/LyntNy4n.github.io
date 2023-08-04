@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>Golang实现LFU算法 | 乱up廿四</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://LyntNy4n.github.io/favicon.ico?v=1691120291339">
+<link rel="stylesheet" href="https://LyntNy4n.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1CGSPF718Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CGSPF718Q');
+</script>
+
+
+    <meta name="description" content="毕竟上一篇文章的项目都用到了, 不妨来讲一下
+
+最近最不常用(LFU, Least Frequently Used)算法
+以次数作为参考,如果次数相同,则淘汰最早的数据
+因为规则多了,LFU会比LRU复杂,而且有多种方法实现,我们只看常用的..." />
+    <meta name="keywords" content="Golang,通用编程" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://LyntNy4n.github.io">
+        <img src="https://LyntNy4n.github.io/images/avatar.png?v=1691120291339" class="site-logo">
+        <h1 class="site-title">乱up廿四</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/LyntNy4n" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      LyntNy4n的垃圾场
+    </div>
+    <div class="site-footer">
+      114514 1919810 | <a class="rss" href="https://LyntNy4n.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">Golang实现LFU算法</h2>
+            <div class="post-date">2023-08-03</div>
+            
+            <div class="post-content" v-pre>
+              <p>毕竟上一篇文章的项目都用到了, 不妨来讲一下</p>
+<!-- more -->
+<h3 id="最近最不常用lfu-least-frequently-used算法">最近最不常用(LFU, Least Frequently Used)算法</h3>
+<p>以次数作为参考,如果次数相同,则淘汰最早的数据</p>
+<p>因为规则多了,LFU会比LRU复杂,而且有多种方法实现,我们只看常用的:</p>
+<ul>
+<li>双哈希表(+N个双向链表), 一个HashMap实现Get操作的O(1)复杂度，同时使用另一个HashMap，其Key为频次，Value为该频次下缓存节点的双向链表，用于保存该频次的缓存节点，用于维护最小频次</li>
+</ul>
+<p>第一个哈希表是key-value的哈希表(以下简称kv哈希表)</p>
+<img src="https://pic.leetcode-cn.com/c91b3444d84a5b175414b6cc66dc9d6ce357dfec636b917871fd48125bc5a0e1-1.jpg" alt="1.jpg" style="zoom: 80%;" />
+<p>key就是输入的key，而它的value不是一个简单的value，而是一个节点对象<code>Node</code><br>
+节点对象Node包含了key，value，以及频率，这个Node也会出现在第二个哈希表的value中。<br>
+至于为什么Node中又重复包含了key，因为某些情况下我们不是通过k-v哈希表拿到Node的，而是通过其他方式获得了Node，之后需要用Node中的key去k-v哈希表中做一些操作，所以Node中包含了一些冗余信息</p>
+<p>第二张哈希表，频率哈希表</p>
+<img src="https://pic.leetcode-cn.com/6295cf4a8078096ba9b049e17a6bf8b6be3079edbc8111363a3b3727cf37173e-2.jpg" alt="2.jpg" style="zoom:80%;" />
+<p>key是频率，也就是元素被访问的频率(被访问了1次，被访问了两次等等)，它的value是一个双向链表<br>
+刚才说的Node对象和这里的Node是一个东西,它其实是双向链表中的一个节点。<br>
+第一张图中我们介绍了Node中包含了一个冗余的key，其实它还包含了一个冗余的频率值，因为某些情况下，我们需要通过Node中的频率值，去频率哈希表中做查找，所以也需要一个冗余的频率值。</p>
+<p>两张表结合起来:</p>
+<img src="https://pic.leetcode-cn.com/bb3811c03de13fc8548a01c9ab094f5ed38d7ef9b5f5c6ef82340e222750ae92-3.jpg" alt="3.jpg" style="zoom:80%;" />
+<p>k-v哈希表中key1指向一个Node，这个Node的频率为1，位于频率哈希表中key=1下面的双链表中(处于第一个节点)</p>
+<h4 id="获取数据">获取数据</h4>
+<p>具体逻辑大致是这样：</p>
+<ul>
+<li>如果key不存在则返回-1/nil/false,根据API而定</li>
+<li>如果key存在，则返回对应的value，同时:
+<ul>
+<li>假设该key对应的Node的频率为i,将该Node的访问频率+1,并将Node从访问频率为i的链表中移出，放到频率为i+1的链表中(如果这个频率的链表不存在,就需要先创建)</li>
+<li>如果移出之后,频率i的链表为空，则从频率哈希表中移除这个链表</li>
+</ul>
+</li>
+</ul>
+<img src="https://pic.leetcode-cn.com/00ec8b79c1ada23bb3910f81d688468cd0cc5179f85f9c266a5c76e827c3cdd6-4.gif" style="zoom: 67%;" />
+<h4 id="添加更新数据">添加/更新数据</h4>
+<ul>
+<li>如果key已经存在，修改对应的value，并将访问频率+1
+<ul>
+<li>将元素从访问频率<code>i</code>的链表中移除，放到频率<code>i+1</code>的链表中</li>
+<li>如果频率<code>i</code>的链表为空，则从频率哈希表中移除这个链表</li>
+</ul>
+</li>
+<li>如果key不存在
+<ul>
+<li>缓存超过最大容量，则先删除访问频率最低的元素(如果对应链表为空也要删)，再插入新元素
+<ul>
+<li>新元素的访问频率为1，如果频率哈希表中不存在对应的链表需要创建</li>
+</ul>
+</li>
+<li>缓存没有超过最大容量，则插入新元素
+<ul>
+<li>新元素的访问频率为1，如果频率哈希表中不存在对应的链表需要创建</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>我们在代码实现中还需要维护一个<code>minFreq</code>的变量，用来记录LFU缓存中频率最小的元素，在缓存满的时候，可以快速定位到最小频繁的链表，以达到 <strong>O(1)</strong> 时间复杂度删除一个元素。 维护<code>minFreq</code>的具体做法是:</p>
+<ul>
+<li>更新/查找的时候，将Node频率+1之后,如果<code>minFreq</code>对应的链表不在频率哈希表中了，说明那条链表已经没有元素,被删除了.那么<code>minFreq</code>需要+1，否则<code>minFreq</code>不变。</li>
+<li>插入的时候，因为新元素的频率都是1，所以只需要将minFreq改为1即可。</li>
+</ul>
+<p>看下缓存超过最大容量时是怎么处理的:</p>
+<img src="https://pic.leetcode-cn.com/f9cbf292271ab715f5dab1f08bb0bab834fae7d24d26cc675ee0cc4fdb2f18c7-6.gif" style="zoom:67%;" />
+<p>综上所述,LFU的代码如下:</p>
+<pre><code class="language-go">// OnEvicted 当key-value被淘汰时 执行的处理函数 cachestrategy包里的
+type OnEvicted func(key string, value Lengthable)
+
+// Node 定义双向链表节点所存储的对象
+// 其实key和freq可以不用存储在Node中，但是为了一些情况下查找方便，就存了
+type Node struct {
+	key   string
+	value Value
+	freq  int
+}
+
+// Cache 是LFU算法实现的缓存
+type Cache struct {
+	maxByte  int64                    // Cache 最大容量(Byte)
+	currByte int64                    // Cache 当前容量(Byte)
+	kvMap    map[string]*list.Element // key对应的双向链表节点
+	freqMap  map[int]*list.List       // 频率对应的双向链表,链头表示最近使用
+	minFreq  int                      // 最小频率
+
+    callback cachestrategy.OnEvicted // 淘汰回调(可选)
+
+}
+
+// New 创建指定最大容量的LFU缓存
+// 当maxBytes为0时，代表cache无内存限制，无限存放
+func New(maxBytes int64, callback cachestrategy.OnEvicted) *Cache {
+	return &amp;Cache{
+		maxByte:  maxBytes,
+		kvMap:    make(map[string]*list.Element),
+		freqMap:  make(map[int]*list.List),
+		callback: callback,
+	}
+}
+
+// Len 返回当前缓存元素个数
+func (c *Cache) Len() int64 {
+	return int64(len(c.kvMap))
+}
+
+// Get 从缓存获取对应key的value。
+// ok 指明查询结果 false代表查无此key
+func (c *Cache) Get(key string) (value Value, ok bool) {
+	if elem, ok := c.kvMap[key]; ok {
+		c.updateFreq(elem)
+		node := elem.Value.(*Node)
+		return node.value, true
+	}
+	return
+}
+
+// Add 向缓存添加/更新一枚key-value
+func (c *Cache) Add(key string, value Value) {
+	kvSize := int64(len(key)) + int64(value.Len())
+	// cache 容量检查
+	for c.maxByte != 0 &amp;&amp; c.currByte+kvSize &gt; c.maxByte {
+		c.Evict()
+	}
+
+	if elem, ok := c.kvMap[key]; ok {
+		node := elem.Value.(*Node)
+		c.currByte += int64(value.Len()) - int64(node.value.Len())
+		node.value = value
+		c.updateFreq(elem)
+	} else {
+		// 新增缓存key值
+		node := &amp;Node{key: key, value: value, freq: 1}
+		// 如果freq为1的链表不存在，创建该链表
+		if _, ok := c.freqMap[1]; !ok {
+			c.freqMap[1] = list.New()
+		}
+		elem := c.freqMap[1].PushFront(node)
+		c.kvMap[key] = elem
+		// 更新minFreq
+		c.minFreq = 1
+		// 更新写入字节
+		c.currByte += kvSize
+	}
+}
+
+// Evict 淘汰一枚最低频率的缓存,如果次数相同,则淘汰最早的数据
+func (c *Cache) Evict() {
+	// 获取最低频率的链表
+	lowFreqList := c.freqMap[c.minFreq]
+	// 获取最低频率链表的最后一个节点
+	node := lowFreqList.Back().Value.(*Node)
+	// 删除最低频率链表的最后一个节点
+	lowFreqList.Remove(lowFreqList.Back())
+	// 删除kvMap中对应的key
+	delete(c.kvMap, node.key)
+	// 更新写入字节
+	c.currByte -= int64(len(node.key)) + int64(node.value.Len())
+	// 如果最低频率链表为空，删除该链表
+	if lowFreqList.Len() == 0 {
+		delete(c.freqMap, c.minFreq)
+	}
+	// 执行淘汰回调
+	if c.callback != nil {
+		c.callback(node.key, node.value)
+	}
+}
+
+func (c *Cache) updateFreq(elem *list.Element) {
+	node := elem.Value.(*Node)
+	// 将节点从原来的freq对应的链表中删除
+	c.freqMap[node.freq].Remove(elem)
+	// 更新节点的freq
+	node.freq++
+	// 如果新的freq对应的链表不存在，创建该链表
+	if _, ok := c.freqMap[node.freq]; !ok {
+		c.freqMap[node.freq] = list.New()
+	}
+	// 将节点插入到新的freq对应的链表中
+	c.freqMap[node.freq].PushFront(elem)
+	// 如果原来的freq对应的链表为空，删除该链表
+	if c.freqMap[node.freq].Len() == 0 {
+		delete(c.freqMap, node.freq)
+	}
+	// 更新minFreq
+	if c.minFreq == node.freq-1 {
+		c.minFreq++
+	}
+}
+</code></pre>
+<h2 id="参考链接">参考链接</h2>
+<p><a href="https://leetcode.cn/problems/lfu-cache/solutions/210980/chao-xiang-xi-tu-jie-dong-tu-yan-shi-460-lfuhuan-c/">Leetcode:超详细图解+动图演示 460. LFU缓存</a></p>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://LyntNy4n.github.io/tag/go/" class="tag">
+                    Golang
+                  </a>
+                
+                  <a href="https://LyntNy4n.github.io/tag/tech/" class="tag">
+                    通用编程
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://LyntNy4n.github.io/post/simple_groupcache_go/">
+                  <h3 class="post-title">
+                    分布式缓存 simple groupcache 实现篇
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+  <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  <script>
+    hljs.initHighlightingOnLoad()
+  </script>
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '193da042420864465789',
+        clientSecret: '36e16db48c1d62042f8e44a5155cf49bef58caa0',
+        repo: 'LyntNy4n.github.io',
+        owner: 'LyntNy4n',
+        admin: ['LyntNy4n'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

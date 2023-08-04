@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>不会KMP也没关系,试试更简单更快的Sunday算法! | 乱up廿四</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://LyntNy4n.github.io/favicon.ico?v=1691120291339">
+<link rel="stylesheet" href="https://LyntNy4n.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1CGSPF718Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CGSPF718Q');
+</script>
+
+
+    <meta name="description" content="TLDR: Sunday算法是一种比KMP算法简单且更快的字符串匹配算法.尽管如此,由于种种原因,目前更通用的算法是BM算法
+
+字符串匹配,是在一个字符串s中寻找与子串(也称模式串,pattern,简称p)首次匹配的索引位置.解决这个问题最..." />
+    <meta name="keywords" content="通用编程,Python" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://LyntNy4n.github.io">
+        <img src="https://LyntNy4n.github.io/images/avatar.png?v=1691120291339" class="site-logo">
+        <h1 class="site-title">乱up廿四</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/LyntNy4n" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      LyntNy4n的垃圾场
+    </div>
+    <div class="site-footer">
+      114514 1919810 | <a class="rss" href="https://LyntNy4n.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">不会KMP也没关系,试试更简单更快的Sunday算法!</h2>
+            <div class="post-date">2023-05-08</div>
+            
+            <div class="post-content" v-pre>
+              <p>TLDR: Sunday算法是一种比KMP算法简单且更快的字符串匹配算法.尽管如此,由于种种原因,目前更通用的算法是BM算法</p>
+<!-- more -->
+<p>字符串匹配,是在一个字符串s中寻找与子串(也称模式串,pattern,简称p)首次匹配的索引位置.解决这个问题最简单的方法肯定是暴力搜索,套2个for循环去遍历.然而这样做的时间复杂度是O(m*n),m是s的长度,n是p的长度.如果想要更高效的做法,很多书/网站会介绍<strong>KMP</strong>算法,它的复杂度是O(m+n).然而KMP算法的做法比较复杂,特别是那个next数组,我也整不明白(.然后我偶然看到了一个叫<strong>Sunday</strong>的算法,它也是用来做字符串匹配的,但是实现简单得多,而且它居然比KMP还快,平均时间复杂度降低到了O(m/n).所以不会KMP也没关系,学个Sunday也不错(</p>
+<h2 id="sunday算法">Sunday算法</h2>
+<p>Sunday算法比KMP,BM算法出现的晚(1990年),它是对BM算法的进一步小幅优化</p>
+<h3 id="流程演示">流程演示</h3>
+<p>先不讲实现,我们先看看Sunday算法是怎么做的:</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101339_63895f5324e0726240.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_后缀_16" loading="lazy"></figure>
+<p>首先原字符串和子串左端对齐，发现“T”与“E”不匹配之后，检测<strong>原字符串中下一个字符</strong>（在这个例子中是“THIS IS”后面的那个空格,索引为7）是否在子串中出现，如果出现移动子串将两者对齐，如果没有出现则直接将子串移动到下一个位置。这里空格没有在子串中出现，移动子串到空格的下一个位置“A”：</p>
+<figure data-type="image" tabindex="2"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101339_63895f534a2c231417.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_字符串_17" loading="lazy"></figure>
+<p>发现“A”与“E”不匹配，但是原字符串中下一个字符“E”(索引15)在子串中出现了，第一个字符和最后一个字符都有出现，那么移动子串<strong>靠后</strong>的字符与原字符串对齐：</p>
+<figure data-type="image" tabindex="3"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101339_63895f536834190591.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_子串_18" loading="lazy"></figure>
+<p>然后发现空格和“E”不匹配，原字符串中下一个字符“空格”也没有在子串中出现，所以直接移动子串到空格(索引16)的下一个字符“E”(索引17)：</p>
+<figure data-type="image" tabindex="4"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101339_63895f537f20078398.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_后缀_19" loading="lazy"></figure>
+<p>这样从头开始逐个匹配，匹配成功!</p>
+<h3 id="算法解释">算法解释</h3>
+<p>Sunday算法是从前往后匹配,如果匹配失败,关注的是主串中<strong>参加匹配的最末位字符的下一位字符</strong>,对此有两种情况:</p>
+<ul>
+<li>如果该字符没有在模式串中出现则直接跳过，即移动位数 = 模式串长度 + 1(即全部不匹配,整个挪走)</li>
+<li>否则，其移动位数 = <strong>模式串中该字符最右出现的位置到尾部的距离 + 1</strong> = 模式串长度 - 该字符最右出现的位置(以0开始)</li>
+</ul>
+<p>对于第二种情况的移动位数,我们可以预先用哈希表计算并存起来,代码也很简单</p>
+<pre><code class="language-python">def calc_shift_dict(pattern:str) -&gt; dict[str, int]:
+    shift_dict={}
+    for i, c in enumerate(pattern):
+        shift_dict[c] = len(pattern) - i
+    return shift_dict
+# 以 'EXAMPLE' 为例
+# shift_dict = {'E': 1, 'X': 6, 'A': 5, 'M': 4, 'P': 3, 'L': 2}
+# 循环中,最后一个E会更新第一个E的值,以达到最右出现的位置的效果
+</code></pre>
+<p>有了这个偏移表,后续逻辑写起来就很容易了,比KMP简单的不是一点半点:</p>
+<pre><code class="language-python">def sunday(s: str, p: str) -&gt; int:
+    n, m = len(s), len(p)
+    shift_dict = calc_shift_dict(p)          	# 生成偏移表 
+    i = 0
+    while i + m &lt;= n:                           # 以免 s[i: i + m] 超出范围
+        if s[i: i + m] == p:
+            return i                            # 匹配完成,返回模式串 p 在文本串 s 的位置
+        if i + m == n:                          # 边界情况: 匹配到 s 末尾了,不能再取末尾的下一个索引了 
+            return -1
+        i += shift_dict.get(s[i + m], m + 1)    # 通过偏移表,向右进行进行快速移动
+    return -1                                   # 匹配失败
+</code></pre>
+<p>这里最脑梗的就是第8行的if,你也许会想,我直接while改成<code>while i + m &lt; n</code>,然后不就可以去掉<code>if i + m == n</code>这个判断了?</p>
+<p>然而不行,因为while是来判断取s的切片有没有超出s的长度,而if是来判断模式串末尾是不是移动到了s的末尾</p>
+<p>举一个例子: s和t都是<code>'abc'</code>,那么一开始<code>i + m = 0 + 3 = 3</code>跟n是一样的,这会导致进不去while而返回-1,然而真实结果应该是0,所以while不能修改</p>
+<p>那if能不能单去掉?也不能,考虑<code>s='abc' t='abd'</code>,一开始可以进入while,然后第一个if不行,如果没有第二个if,那就到了<code>shift_dict.get(s[i + m], m + 1)</code>这里,由于s最大索引是2,但是<code>i + m</code>是3,这样就会超出索引报错.第二个if就是为了兜住这个边界情况而存在的</p>
+<h3 id="优缺点">优缺点</h3>
+<p>Sunday算法的优点:</p>
+<ol>
+<li>匹配逻辑简单,比较符合直觉;写起来也简单,只需要注意最后匹配到末尾的边界情况就行了</li>
+<li>预处理时间较短,大部分情况也比KMP快,平均时间复杂度是O(n/m)</li>
+</ol>
+<p>很可惜,这么简洁的算法却没有BM算法流行,因为它也有软肋:</p>
+<ol>
+<li>Sunday算法的核心依赖于偏移表，而偏移表的值则取决于模式串，那么就可能存在模式串构造出很差的偏移表,比如<code>aaaaa</code>的表就是<code>{a:1}</code>,这导致每次匹配失败时，只让模式串向后移动一位再进行匹配。这样就让Sunday算法的时间复杂度飙升到了<code>O(m*n)</code>，也就是字符串匹配的最坏情况</li>
+</ol>
+<p>根据知乎该位用户所言,Sunday算法有比较高的可能达到最坏时间复杂度</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20230508151631101.png" alt="image-20230508151631101" style="zoom:67%;" />
+<p>那么不同的适用于哪里呢?我为此请教了ChatGPT(</p>
+<blockquote>
+<p>Q: BM算法和Sunday算法 实际中哪个更常用? 为什么?</p>
+<p>A: BM算法和Sunday算法都是常见的字符串匹配算法，但它们在实际中的使用情况会因为具体的应用场景而有所不同。</p>
+<p>BM算法是一种高效的字符串匹配算法，它的时间复杂度是O(n/m)，其中n和m分别是文本串和模式串的长度。BM算法在大部分情况下都比Sunday算法更快速，因此在需要高效匹配的场景中，如文本编辑器、搜索引擎等领域，BM算法被广泛使用。</p>
+<p>Sunday算法是一种比较简单的字符串匹配算法，它的时间复杂度也是O(n/m)，但是它的实现比BM算法要简单得多。Sunday算法主要适用于模式串比较短的情况，当模式串长度小于等于20时，Sunday算法的表现往往比BM算法更好，因为它的预处理时间较短，可以更快地生成偏移表</p>
+<p>因此，BM算法在大部分情况下更常用，特别是在需要高效匹配的场景中。但在模式串较短的情况下，Sunday算法可以提供更快的匹配速度</p>
+<p>Q: 那KMP算法呢?</p>
+<p>A: KMP算法也是一种常见的字符串匹配算法，它的时间复杂度也是O(n+m)。</p>
+<p>与BM算法和Sunday算法不同的是，KMP算法使用一个next数组来预处理模式串，从而实现快速匹配。具体来说，KMP算法预处理出模式串的next数组后，在匹配过程中，利用next数组中存储的信息来跳过一些不必要的比较，从而提高匹配效率。</p>
+<p>KMP算法适用于文本串和模式串长度相近或者模式串长度较短的情况下，它在一些场景下比BM算法和Sunday算法更适合。例如在字符串匹配长度较短的情况下，KMP算法的预处理时间相对较短，因此在这种情况下，KMP算法可以比BM算法更快地进行匹配。</p>
+<p>综上所述，KMP算法也是一种常见的字符串匹配算法，在某些情况下可以比BM算法和Sunday算法更适合。但在需要高效匹配的场景中，BM算法的效率往往更高一些。</p>
+</blockquote>
+<p>所以实际中是BM算法用得更多,事实上,各种记事本的“查找”功能（CTRL + F）一般都是采用BM算法</p>
+<h2 id="其他字符串匹配算法简介">其他字符串匹配算法简介</h2>
+<h3 id="暴力算法">暴力算法</h3>
+<p>暴力检索法是最好想到的算法，也最好实现，在情况简单的情况下可以直接使用：</p>
+<figure data-type="image" tabindex="5"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101337_63895f519d92610454.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_字符串" loading="lazy"></figure>
+<p>首先将原字符串和子串左端对齐，逐一比较；如果第一个字符不能匹配，则子串向后移动一位继续比较；如果第一个字符匹配，则继续比较后续字符，直至全部匹配。</p>
+<p>时间复杂度: O(m*n)</p>
+<h3 id="rk算法">RK算法</h3>
+<p>RK算法是对BF算法的一个改进：在BF算法中，每一个字符都需要进行比较，并且当我们发现首字符匹配时仍然需要比较剩余的所有字符。而在RK算法中，就尝试只进行一次比较来判定两者是否相等。</p>
+<p>RK算法也可以进行多模式匹配，在论文查重等实际应用中一般都是使用此算法。</p>
+<figure data-type="image" tabindex="6"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101337_63895f51b36264440.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_子串_02" loading="lazy"></figure>
+<p>首先计算子串的HASH值，之后分别取原字符串中子串长度的字符串计算HASH值，比较两者是否相等：如果HASH值不同，则两者必定不匹配，如果相同，由于哈希冲突存在，也需要按照BF算法再次判定。</p>
+<p>按照此例子，首先计算子串“DEF”HASH值为Hd，之后从原字符串中依次取长度为3的字符串“ABC”、“BCD”、“CDE”、“DEF”计算HASH值，分别为Ha、Hb、Hc、Hd，当Hd相等时，仍然要比较一次子串“DEF”和原字符串“DEF”是否一致。</p>
+<p>时间复杂度: O(m*n)实际应用中往往较快，期望时间为O(m+n)</p>
+<h3 id="kmp算法">KMP算法</h3>
+<p><strong>Knuth Morris Pratt 算法</strong>，是由它的三位发明者 Donald Knuth、James H. Morris、 Vaughan Pratt 的名字来命名的。KMP 算法是他们三人在 1977 年联合发表的。</p>
+<p>字符串匹配最经典算法之一，各大教科书上的看家绝学，曾被投票选为当今世界最伟大的十大算法之一；但是晦涩难懂，并且十分难以实现</p>
+<p>对于给定文本串 <code>T</code> 与模式串 <code>p</code>，当发现文本串 <code>T</code> 的某个字符与模式串 <code>p</code> 不匹配的时候，可以利用匹配失败后的信息，尽量减少模式串与文本串的匹配次数，避免文本串位置的回退，以达到快速匹配的目的。</p>
+<p>时间复杂度: 稳定的O(m+n)</p>
+<h3 id="bm算法">BM算法</h3>
+<p><strong>Boyer Moore 算法</strong> 是由它的两位发明者 Robert S. Boyer 和 J Strother Moore 的名字来命名的。BM 算法是他们在 1977 年提出的高效字符串搜索算法。在实际应用中，比 KMP 算法要快 3~5 倍</p>
+<p>对于给定文本串 <code>T</code> 与模式串 <code>p</code>，先对模式串 <code>p</code> 进行预处理。然后在匹配的过程中，当发现文本串 <code>T</code> 的某个字符与模式串 <code>p</code> 不匹配的时候，根据启发策略，能够直接尽可能地跳过一些无法匹配的情况，将模式串多向后滑动几位</p>
+<p>BM 算法的精髓在于使用了两种不同的启发策略来计算后移位数：<strong>「坏字符规则（The Bad Character Rule）」</strong> 和 <strong>「好后缀规则（The Good Suffix Shift Rule）」</strong></p>
+<p>这两种启发策略的计算过程只与模式串 <code>p</code> 相关，而与文本串 <code>T</code> 无关。因此在对模式串 <code>p</code> 进行预处理时，可以预先生成「坏字符规则后移表」和「好后缀规则后移表」，然后在匹配的过程中，只需要比较一下两种策略下最大的后移位数进行后移即可。</p>
+<p>同时，还需要注意一点。BM 算法在移动模式串的时候和常规匹配算法一样是从左到右进行，但是在进行比较的时候是从右到左，即基于后缀进行比较。</p>
+<p>时间复杂度: O(m/n) 最坏也是O(m*n),但是几率比Sunday小,而且可以改良成稳定的</p>
+<h2 id="参考文献">参考文献</h2>
+<p><a href="https://blog.51cto.com/u_14230175/5905645">收藏整理：KMP,BM,SUNDAY算法综合</a></p>
+<p><a href="https://www.jianshu.com/p/2e6eb7386cd3">字符串匹配算法之Sunday算法</a></p>
+<p><a href="https://algo.itcharge.cn/06.String/02.String-Single-Pattern-Matching/06.String-Sunday/">算法通关手册:Sunday 算法</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/142895983">动画演示Sunday字符串匹配算法——比KMP算法快七倍！极易理解！</a></p>
+<p><a href="https://blog.csdn.net/cy_cai/article/details/53130374">Simple、KMP、BM、Sunday匹配算法-效率测试</a></p>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://LyntNy4n.github.io/tag/tech/" class="tag">
+                    通用编程
+                  </a>
+                
+                  <a href="https://LyntNy4n.github.io/tag/python/" class="tag">
+                    Python
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://LyntNy4n.github.io/post/pngme/">
+                  <h3 class="post-title">
+                    PNGme:基于Rust的命令行程序 在PNG图片中隐藏信息
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+  <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  <script>
+    hljs.initHighlightingOnLoad()
+  </script>
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '193da042420864465789',
+        clientSecret: '36e16db48c1d62042f8e44a5155cf49bef58caa0',
+        repo: 'LyntNy4n.github.io',
+        owner: 'LyntNy4n',
+        admin: ['LyntNy4n'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

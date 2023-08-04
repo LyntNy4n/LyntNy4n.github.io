@@ -1,0 +1,970 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>PNGme:基于Rust的命令行程序 在PNG图片中隐藏信息 | 乱up廿四</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://LyntNy4n.github.io/favicon.ico?v=1691120291339">
+<link rel="stylesheet" href="https://LyntNy4n.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1CGSPF718Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CGSPF718Q');
+</script>
+
+
+    <meta name="description" content="本文基于 https://picklenerd.github.io/pngme_book/introduction.html 精简了一下并附带了自己的理解
+
+我们要制作一个命令行程序PNGme，可以在 PNG 文件中隐藏秘密消息
+完整代码可..." />
+    <meta name="keywords" content="Rust" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://LyntNy4n.github.io">
+        <img src="https://LyntNy4n.github.io/images/avatar.png?v=1691120291339" class="site-logo">
+        <h1 class="site-title">乱up廿四</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/LyntNy4n" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      LyntNy4n的垃圾场
+    </div>
+    <div class="site-footer">
+      114514 1919810 | <a class="rss" href="https://LyntNy4n.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">PNGme:基于Rust的命令行程序 在PNG图片中隐藏信息</h2>
+            <div class="post-date">2023-05-01</div>
+            
+            <div class="post-content" v-pre>
+              <p>本文基于 https://picklenerd.github.io/pngme_book/introduction.html 精简了一下并附带了自己的理解</p>
+<!-- more -->
+<p>我们要制作一个命令行程序<strong>PNGme</strong>，可以在 PNG 文件中隐藏秘密消息</p>
+<p>完整代码可见 https://github.com/LyntNy4n/pngme</p>
+<h2 id="需要做什么">需要做什么?</h2>
+<p>程序将有四个命令:</p>
+<ol>
+<li>Encode a message into a PNG file<br>
+将消息编码为 PNG 文件</li>
+<li>Decode a message stored in a PNG file<br>
+解码存储在 PNG 文件中的消息</li>
+<li>Remove a message from a PNG file<br>
+从 PNG 文件中删除消息</li>
+<li>Print a list of PNG chunks that can be searched for messages<br>
+打印可搜索消息的 PNG 块列表</li>
+</ol>
+<h2 id="初始配置">初始配置</h2>
+<p>使用 <code>cargo new --bin pngme</code> 创建一个新的二进制项目,将将以下代码复制到 <code>main.rs</code> 文件中</p>
+<pre><code class="language-rust">mod args;
+mod chunk;
+mod chunk_type;
+mod commands;
+mod png;
+
+pub type Error = Box&lt;dyn std::error::Error&gt;;
+pub type Result&lt;T&gt; = std::result::Result&lt;T, Error&gt;;
+
+fn main() -&gt; Result&lt;()&gt; {
+    todo!()
+}
+</code></pre>
+<p>接下来我们就要完成各个模块,先把各模块的rs文件在src目录中创建好,以免报错</p>
+<p>在上面代码中提供了 <code>Error</code> 和 <code>Result</code> 类型别名，它们可以让你在代码中轻松使用 <code>?</code> 运算符,也可以用第三方库<code>anyhow</code>做到同样的</p>
+<p><a href="http://www.libpng.org/pub/png/spec/1.2/PNG-Structure.html">PNG 文件结构规范</a> 需要去看一下,下面也会有讲到</p>
+<p>PS. 原文还提供了每个模块的测试用例,但是太长了,这里就不列出来了.可以去原文章去看,或者github上的完整代码里也有</p>
+<h2 id="chunk-types-块类型">Chunk Types 块类型</h2>
+<p>PNG 文件本质上只是一个“块”列表，每个块都包含自己的数据。每个块都有一个可以表示为 4 个字符的字符串的类型。像图像数据这样的东西有标准的块类型，但是没有规则会阻止你插入你自己的块和你想要的任何数据。我们甚至可以告诉 PNG 解码器忽略我们的块</p>
+<h3 id="chunk-type的通俗解释">Chunk Type的通俗解释</h3>
+<p>一个块类型就是4个以字节表示的ASCII码英文字母,比如<code>BLOB</code>,<code>RUST</code>,<code>Wuhu</code></p>
+<p>不过还是有一些规则的,这些规则代表了不同的含义:</p>
+<p>每个字节的第5位（从0开始,对应二进制值的32）用于传达块属性。者意味着人们可以根据类型代码的每个字母是大写（第 5 位为 0）还是小写（第 5 位为 1）来读取分配的属性,<strong>不同字节的第5位有不同的含义</strong></p>
+<ol>
+<li><strong>辅助位：第一个字节的第 5 位</strong></li>
+</ol>
+<p>​	0 (uppercase) = critical, 1 (lowercase) = ancillary<br>
+​	0（大写）= 关键，1（小写）= 辅助</p>
+<p>​	遇到辅助位为 1 的未知块的解码器可以安全地忽略该块并继续显示图像,比如时间块 (tIME)</p>
+<ol start="2">
+<li><strong>私有位：第二个字节的第 5 位</strong></li>
+</ol>
+<p>​	0 (uppercase) = public, 1 (lowercase) = private<br>
+​	0（大写）= 公共，1（小写）= 私有</p>
+<p>​	公共块是 PNG 规范的一部分或在 PNG 专用公共块类型列表中注册的块。应用程序还可以为自己的目的定义私有（未注册）块</p>
+<ol start="3">
+<li><strong>保留(Reserved)位：第三个字节的第5位</strong></li>
+</ol>
+<p>​	第三个字母大小写的意义是为将来可能的扩展保留的。目前所有的块名都必须有大写(0)的第三个字母</p>
+<ol start="4">
+<li><strong>安全复制位: 第四个字节的第5位</strong></li>
+</ol>
+<p>​	0 (uppercase) = unsafe to copy, 1 (lowercase) = safe to copy</p>
+<p>​	0（大写）= 复制不安全，1（小写）= 复制安全</p>
+<p>​	如果块的安全复制位为 1，则无论软件是否识别块类型，也不管文件修改的范围如何，都可以将块复制到修改后的 PNG 文件</p>
+<p>​	如果块的安全复制位为 0，则表示该块依赖于图像数据。如果程序对关键块进行了任何更改，包括关键块的添加、修改、删除或重新排序，则不得将无法识别的不安全块复制到输出 PNG 文件中</p>
+<h3 id="实现块类型">实现块类型</h3>
+<p>在<code>chunk_type.rs</code>中开写</p>
+<p>我们要在Rust中复刻PNG的块类型,需要提供以字节为单位返回块类型的方法，检查整个块类型的有效性，并检查四个字节中每个字节的大写特殊含义。下面提供了方法签名</p>
+<pre><code class="language-rust">fn bytes(&amp;self) -&gt; [u8; 4]
+fn is_valid(&amp;self) -&gt; bool
+fn is_critical(&amp;self) -&gt; bool
+fn is_public(&amp;self) -&gt; bool
+fn is_reserved_bit_valid(&amp;self) -&gt; bool
+fn is_safe_to_copy(&amp;self) -&gt; bool
+// 还要实现 TryFrom&lt;[u8; 4]&gt;, FromStr, Display, PartialEq 和 Eq
+</code></pre>
+<p>也许最简单的<code>ChunkType</code>就是这样:</p>
+<pre><code class="language-rust">pub struct ChunkType {
+    bytes: [u8; 4],
+}
+//或者这样也可以
+pub struct ChunkType {
+    first_byte: u8,
+    second_byte: u8,
+    third_byte: u8,
+    fourth_byte: u8,
+}
+</code></pre>
+<p>在这里,我们玩花的,使用第二种表示,因为每个字节都有不同的含义,分开表示也不错</p>
+<p>然后下面就是各种方法的实现了:</p>
+<pre><code class="language-rust">impl ChunkType {
+    pub fn bytes(&amp;self) -&gt; [u8; 4] {
+        [
+            self.first_byte,
+            self.second_byte,
+            self.third_byte,
+            self.fourth_byte,
+        ]
+    }
+    pub fn is_critical(&amp;self) -&gt; bool {
+        self.first_byte &amp; 0b0010_0000 == 0
+    }
+    pub fn is_public(&amp;self) -&gt; bool {
+        self.second_byte &amp; 0b0010_0000 == 0
+    }
+    pub fn is_reserved_bit_valid(&amp;self) -&gt; bool {
+        self.third_byte &amp; 0b0010_0000 == 0
+    }
+    pub fn is_safe_to_copy(&amp;self) -&gt; bool {
+        self.fourth_byte &amp; 0b0010_0000 != 0
+    }
+    pub fn is_valid(&amp;self) -&gt; bool {
+        self.is_reserved_bit_valid()
+    }
+}
+
+fn is_all_alphabetic(bytes: [u8; 4]) -&gt; bool {
+    bytes.iter().all(|byte| byte.is_ascii_alphabetic())
+}
+</code></pre>
+<p>也可以用<code>is_ascii_uppercase()</code>,但按位与应该更快一点,不过这样我们就要保证这4个字节都是ASCII字母了</p>
+<p>多写了<code>is_all_alphabetic</code>,用于后续验证</p>
+<p><code>PartialEq, Eq</code>我们derive就可以了,接下来我们实现<code>TryFrom</code></p>
+<pre><code class="language-rust">impl TryFrom&lt;[u8; 4]&gt; for ChunkType {
+    type Error = &amp;'static str;
+
+    fn try_from(bytes: [u8; 4]) -&gt; std::result::Result&lt;Self, Self::Error&gt; {
+        if !is_all_alphabetic(bytes) {
+            return Err(&quot;ChunkType must be alphabetic&quot;);
+        }
+        let chunk_type = ChunkType {
+            first_byte: bytes[0],
+            second_byte: bytes[1],
+            third_byte: bytes[2],
+            fourth_byte: bytes[3],
+        };
+        Ok(chunk_type)
+    }
+}
+</code></pre>
+<p>朴实无华,注意这里不用检查第三位是不是小写</p>
+<p>然后是<code>FromStr</code></p>
+<pre><code class="language-rust">impl FromStr for ChunkType {
+    type Err = &amp;'static str;
+
+    fn from_str(s: &amp;str) -&gt; Result&lt;Self, Self::Err&gt; {
+        if s.len() != 4 {
+            return Err(&quot;ChunkType string must be 4 characters long&quot;);
+        }
+        let mut bytes = [0; 4];
+        for (i, byte) in s.bytes().enumerate() {
+            bytes[i] = byte;
+        }
+        ChunkType::try_from(bytes)
+    }
+}
+</code></pre>
+<p>用<code>tryfrom</code>,爽死辣(</p>
+<p><code>Display</code>显示字母就好了</p>
+<pre><code class="language-rust">impl Display for ChunkType {
+    fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        let bytes = self.bytes();
+        for byte in bytes.iter() {
+            write!(f, &quot;{}&quot;, *byte as char)?;
+        }
+        Ok(())
+    }
+}
+</code></pre>
+<h2 id="chunk-块">Chunk 块</h2>
+<p>我们已经有了 <code>ChunkType</code> 结构，我们可以实现其余的块了。再次查看 PNG 文件结构规范。 <code>3.2</code> 部分包含需要的所有信息</p>
+<h3 id="块布局">块布局</h3>
+<p>每个块由四个部分组成：</p>
+<p><strong>Length</strong>: 一个 <strong>4 字节无符号整数</strong>，表示块数据字段中的字节数。<strong>长度仅计算数据字段</strong>，而不计算其本身、块类型代码或 CRC。零是有效长度。尽管编码器和解码器应将长度视为无符号，但其值不得超过 2<sup>31</sup> 字节</p>
+<p><strong>Chunk Type</strong>: 一个 <strong>4 字节的块类型代码</strong>。为了便于描述和检查 PNG 文件，类型代码仅限于由大写和小写 ASCII 字母（A-Z 和 a-z，或 65-90 和 97-122）组成。但是，编码器和解码器必须将代码视为固定的二进制值，而不是字符串(<strong>也就是要看作一个一个字节</strong>)</p>
+<p><strong>Chunk Data</strong>: 适合块类型的数据字节。该字段可以是零长度</p>
+<p><strong>CRC</strong>: 一个4字节的CRC（Cyclic Redundancy Check）是根据chunk前面的字节计算出来的，包括chunk type和chunk data字段，但不包括length字段。 CRC 始终存在，即使对于不包含数据的块也是如此</p>
+<h4 id="关于计算-crc">关于计算 CRC</h4>
+<p>不头铁,选择第三方库,toml里加入<code>crc = &quot;3.0.1&quot;</code> https://crates.io/crates/crc</p>
+<p>我们要实现 PNG 块。这个块应包含上面列出的四段数据,还需要提供方法来返回这四个数据中的每一个，如果块数据是有效的 UTF-8（否则为错误），则块数据被解释为字符串，并且整个块作为字节序列</p>
+<p>在<code>chunk.rs</code>中开写</p>
+<pre><code class="language-rust">fn new(chunk_type: ChunkType, data: Vec&lt;u8&gt;) -&gt; Chunk
+fn length(&amp;self) -&gt; u32
+fn chunk_type(&amp;self) -&gt; &amp;ChunkType
+fn data(&amp;self) -&gt; &amp;[u8]
+fn crc(&amp;self) -&gt; u32
+fn data_as_string(&amp;self) -&gt; Result&lt;String&gt;
+fn as_bytes(&amp;self) -&gt; Vec&lt;u8&gt;
+//还要 TryFrom&lt;&amp;[u8]&gt;, Display
+</code></pre>
+<p><code>Chunk</code>也分四部分好了:</p>
+<pre><code class="language-rust">use crate::chunk_type::ChunkType;
+pub struct Chunk {
+    length: u32,
+    chunk_type: ChunkType,
+    data: Vec&lt;u8&gt;,
+    crc: u32,
+}
+</code></pre>
+<p>然后是实现,这里用了万能Result,不然错误类型麻烦</p>
+<p>crc的用法够清奇的,得翻文档才知道怎么用</p>
+<pre><code class="language-rust">use crate::Result;
+impl Chunk {
+    pub fn new(chunk_type: ChunkType, data: Vec&lt;u8&gt;) -&gt; Chunk {
+        let length = data.len() as u32;
+        let crc_content = chunk_type
+            .bytes()
+            .iter()
+            .chain(data.iter())
+            .copied()
+            .collect::&lt;Vec&lt;u8&gt;&gt;();
+        let crc = crc::Crc::&lt;u32&gt;::new(&amp;crc::CRC_32_ISO_HDLC).checksum(&amp;crc_content);
+        Chunk {
+            length,
+            chunk_type,
+            data,
+            crc,
+        }
+    }
+    pub fn length(&amp;self) -&gt; u32 {
+        self.length
+    }
+    pub fn chunk_type(&amp;self) -&gt; &amp;ChunkType {
+        &amp;self.chunk_type
+    }
+    pub fn data(&amp;self) -&gt; &amp;[u8] {
+        &amp;self.data
+    }
+    pub fn crc(&amp;self) -&gt; u32 {
+        self.crc
+    }
+    pub fn data_as_string(&amp;self) -&gt; Result&lt;String&gt; {
+        let string = String::from_utf8(self.data.clone())?;
+        Ok(string)
+    }
+    pub fn as_bytes(&amp;self) -&gt; Vec&lt;u8&gt; {
+        let mut bytes = Vec::new();
+        bytes.extend(&amp;self.length.to_be_bytes());
+        bytes.extend(&amp;self.chunk_type.bytes());
+        bytes.extend(&amp;self.data);
+        bytes.extend(&amp;self.crc.to_be_bytes());
+        bytes
+    }
+}
+</code></pre>
+<p>然后是<code>TryFrom&lt;&amp;[u8]&gt;, Display</code></p>
+<pre><code class="language-rust">impl TryFrom&lt;&amp;[u8]&gt; for Chunk {
+    type Error = &amp;'static str;
+
+    fn try_from(bytes: &amp;[u8]) -&gt; std::result::Result&lt;Self, Self::Error&gt; {
+        if bytes.len() &lt; 12 {
+            return Err(&quot;Chunk data is too short&quot;);
+        }
+        let chunk_type_bytes: [u8; 4] = bytes[4..8].try_into().unwrap();
+        let chunk_type = ChunkType::try_from(chunk_type_bytes)?;
+        let data = bytes[8..bytes.len() - 4].to_vec();
+        let crc_bytes: [u8; 4] = bytes[bytes.len() - 4..].try_into().unwrap();
+        let crc = u32::from_be_bytes(crc_bytes);
+        let chunk = Chunk::new(chunk_type, data);
+        if chunk.crc != crc {
+            return Err(&quot;CRC does not match&quot;);
+        }
+        Ok(chunk)
+    }
+}
+
+impl Display for Chunk {
+    fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        let chunk_string = self
+            .data_as_string()
+            .unwrap_or_else(|_| String::from(&quot;Invalid UTF-8&quot;));
+        write!(
+            f,
+            &quot;Chunk\n\tLength: {}\n\tType: {}\n\tData: {}\n\tCRC: {}&quot;,
+            self.length, self.chunk_type, chunk_string, self.crc
+        )
+    }
+}
+</code></pre>
+<p><code>chunk_type_bytes</code>要显式声明成<code>[u8;4]</code>才能转</p>
+<p><code>from_be_bytes</code>将<code>[u8;4]</code>按照大端字节序转成<code>u32</code></p>
+<h2 id="png文件">PNG文件</h2>
+<p>终于到了实现完整PNG文件的时候了,我们还要再看一下PNG文件规范</p>
+<h4 id="png文件结构">PNG文件结构</h4>
+<p>一个 PNG 文件由一个 <strong>PNG 签名</strong>和后面的<strong>一系列块</strong>组成</p>
+<p>PNG 签名:即文件的前八个字节始终包含以下（十进制）值：</p>
+<pre><code>137 80 78 71 13 10 26 10
+</code></pre>
+<p>此签名表明文件的其余部分包含单个 PNG 图像，由一系列以 IHDR 块开始并以 IEND 块结束的块组成</p>
+<p>所谓后面的一系列块,就是我们上一节的<code>Chunk</code></p>
+<p>我们需要提供一个构造函数，该构造函数采用块列表、附加和删除块的方法以及返回标头的方法、所有块的一部分以及整个 PNG 文件作为 <code>Vec&lt;u8&gt;</code> 字节</p>
+<p>还要求再<code>impl</code> 块中，添加一个名为 <code>STANDARD_HEADER</code> 的公共常量，它具有8 个标准标头字节</p>
+<p>在<code>png.rs</code>中开写</p>
+<pre><code class="language-rust">fn from_chunks(chunks: Vec&lt;Chunk&gt;) -&gt; Png
+fn append_chunk(&amp;mut self, chunk: Chunk)
+fn remove_chunk(&amp;mut self, chunk_type: &amp;str) -&gt; Result&lt;Chunk&gt;
+fn header(&amp;self) -&gt; &amp;[u8; 8]
+fn chunks(&amp;self) -&gt; &amp;[Chunk]
+fn chunk_by_type(&amp;self, chunk_type: &amp;str) -&gt; Option&lt;&amp;Chunk&gt;
+fn as_bytes(&amp;self) -&gt; Vec&lt;u8&gt;
+//还有 TryFrom&lt;&amp;[u8]&gt;, Display
+</code></pre>
+<p><code>Png</code>结构很容易写出来:</p>
+<pre><code class="language-rust">use crate::chunk::Chunk;
+use crate::Result; // 后面要用到
+pub struct Png {
+    header: [u8; 8],
+    chunks: Vec&lt;Chunk&gt;,
+}
+</code></pre>
+<p>然后是实现:</p>
+<pre><code class="language-rust">impl Png {
+    const STANDARD_HEADER: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
+    pub fn from_chunks(chunks: Vec&lt;Chunk&gt;) -&gt; Png {
+        Png {
+            header: Png::STANDARD_HEADER,
+            chunks,
+        }
+    }
+    pub fn append_chunk(&amp;mut self, chunk: Chunk) {
+        self.chunks.push(chunk);
+    }
+    pub fn remove_chunk(&amp;mut self, chunk_type: &amp;str) -&gt; Result&lt;Chunk&gt; {
+        let index = self
+            .chunks
+            .iter()
+            .position(|chunk| format!(&quot;{}&quot;, chunk.chunk_type()) == chunk_type)
+            .ok_or(&quot;Chunk not found&quot;)?;
+        Ok(self.chunks.remove(index))
+    }
+    pub fn header(&amp;self) -&gt; &amp;[u8; 8] {
+        &amp;self.header
+    }
+    pub fn chunks(&amp;self) -&gt; &amp;[Chunk] {
+        &amp;self.chunks
+    }
+    pub fn chunk_by_type(&amp;self, chunk_type: &amp;str) -&gt; Option&lt;&amp;Chunk&gt; {
+        self.chunks
+            .iter()
+            .find(|chunk| format!(&quot;{}&quot;, chunk.chunk_type()) == chunk_type)
+    }
+    pub fn as_bytes(&amp;self) -&gt; Vec&lt;u8&gt; {
+        let mut bytes = Vec::new();
+        bytes.extend(&amp;self.header);
+        bytes.extend(
+            self.chunks
+                .iter()
+                .flat_map(|chunk| chunk.as_bytes())
+                .collect::&lt;Vec&lt;u8&gt;&gt;(),
+        );
+        bytes
+    }
+}
+</code></pre>
+<p>可以看到<code>remove_chunk</code>中,我们没有实现<code>Chunk</code>转<code>String/str</code>的方法,但是实现了<code>Display</code>,而Display所做的就是显示字节对应的英文字母,所以直接用<code>format!</code>就可以了</p>
+<p>然后是<code>TryFrom, Display</code></p>
+<pre><code class="language-rust">impl TryFrom&lt;&amp;[u8]&gt; for Png {
+    type Error = &amp;'static str;
+
+    fn try_from(bytes: &amp;[u8]) -&gt; std::result::Result&lt;Self, Self::Error&gt; {
+        if bytes.len() &lt; 8 {
+            return Err(&quot;PNG data is too short&quot;);
+        }
+        let header: [u8; 8] = bytes[0..8].try_into().unwrap();
+        if header != Png::STANDARD_HEADER {
+            return Err(&quot;PNG header is invalid&quot;);
+        }
+        let mut chunks = Vec::new();
+        let mut index = 8;
+        while index &lt; bytes.len() {
+            let length_bytes: [u8; 4] = bytes[index..index + 4].try_into().unwrap();
+            let length = u32::from_be_bytes(length_bytes) as usize;
+            let chunk_end = index + 4 + 4 + length + 4; // index + length + type + data + crc
+            if chunk_end &gt; bytes.len() {
+                return Err(&quot;PNG chunk is too long&quot;);
+            }
+            let chunk_bytes = &amp;bytes[index..chunk_end];
+            let chunk = Chunk::try_from(chunk_bytes)?;
+            chunks.push(chunk);
+            index = chunk_end;
+        }
+        Ok(Png { header, chunks })
+    }
+}
+
+impl Display for Png {
+    fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        writeln!(f, &quot;PNG:&quot;)?;
+        for chunk in &amp;self.chunks {
+            writeln!(f, &quot;{}&quot;, chunk)?;
+        }
+        Ok(())
+    }
+}
+</code></pre>
+<h2 id="实现cli">实现CLI</h2>
+<p>最麻烦的部分以及完成了,现在要做的只是解析用户请求了,也就是设置命令行参数。设置参数将使处理该项目的最后一部分变得非常容易</p>
+<p>可以手动解析命令行参数,但用第三方crate是最方便的,<code>clap</code>是不二之选,toml添加<code>clap = { version = &quot;4.2.5&quot;, features = [&quot;derive&quot;] }</code> (原文用的是3.0.1,我这里改用最新的,且需要derive特性)</p>
+<p>我们需要做到能够使用类似于以下的命令运行程序</p>
+<pre><code class="language-bash">pngme encode ./dice.png ruSt &quot;This is a secret message!&quot;
+pngme decode ./dice.png ruSt
+pngme remove ./dice.png ruSt
+pngme print ./dice.png
+</code></pre>
+<p>应该有四个子命令，每个子命令都有自己的一组参数</p>
+<p><strong>Encode</strong> 在特定块中藏信息 需要4个参数</p>
+<ol>
+<li>文件路径</li>
+<li>块类型</li>
+<li>想藏的信息</li>
+<li>输出路径（可选,不写就是覆盖原文件）</li>
+</ol>
+<p><strong>Decode</strong> 从特定块中解密</p>
+<ol>
+<li>文件路径</li>
+<li>块类型</li>
+</ol>
+<p><strong>Remove</strong> 删掉一个块中藏的信息</p>
+<ol>
+<li>文件路径</li>
+<li>块类型</li>
+</ol>
+<p><strong>Print</strong> 打印所有能藏信息的块类型</p>
+<ol>
+<li>文件路径</li>
+</ol>
+<p>在纠结<code>clap</code>的用法之前,我们得先定义这些命令在Rust的表示,用<code>enum</code>就很不错:</p>
+<pre><code class="language-rust">use std::path::PathBuf;
+
+pub enum PngMeArgs {
+    Encode(EncodeArgs),
+    Decode(DecodeArgs),
+    Remove(RemoveArgs),
+    Print(PrintArgs),
+}
+
+pub struct EncodeArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+    message: String,
+    output: Option&lt;PathBuf&gt;,
+}
+
+pub struct DecodeArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+}
+
+pub struct RemoveArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+}
+
+pub struct PrintArgs {
+    file_path: PathBuf,
+}
+</code></pre>
+<p><code>PathBuf</code>是表示文件路径的结构,chatGPT给出了一些解释:</p>
+<blockquote>
+<p><code>PathBuf</code>和<code>Path</code>是Rust标准库中用于处理文件路径的两个类型。它们的主要区别在于可变性和所有权。</p>
+<p><code>Path</code>类型代表一个不可变的文件路径，而<code>PathBuf</code>类型代表一个可变的文件路径。<code>Path</code>类型的方法返回的是引用类型，不允许修改路径；而<code>PathBuf</code>类型的方法返回的是可变引用类型，允许修改路径。这意味着如果你需要修改一个文件路径，你需要使用<code>PathBuf</code>类型。</p>
+</blockquote>
+<p>clap虽然强大,但是比较复杂,想要整明白还不容易.不过我们这里的需求算是简单,所以还能应付,要是再复杂点可能得借助gpt4了(</p>
+<p>clap一般有2种使用方法: <code>build</code>和<code>derive</code>. build比较易懂,但是写起来比较繁琐;derive比较简洁,但是比较难懂</p>
+<p>我们这里使用了derive方法,现在<code>arg.rs</code>的内容如下,你可以看到clap的强大之处:</p>
+<pre><code class="language-rust">use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
+
+#[derive(Debug, Parser)]
+#[clap(name = &quot;pngme&quot;)]
+pub struct Cli {
+    #[clap(subcommand)]
+    pub subcommand: PngMeArgs,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PngMeArgs {
+    //这个enum的变体就会解析成子命令(不分大小写)
+    //因为这个enum有Encode/Decode/Remove/Print 4个变体
+    //所以命令行中就可以输入如 pngme encode ... 这些子命令了
+    Encode(EncodeArgs),
+    Decode(DecodeArgs),
+    Remove(RemoveArgs),
+    Print(PrintArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct EncodeArgs {
+    //通过derive Args 子命令下的参数就会按照这个结构来解析
+    file_path: PathBuf,
+    chunk_type: String,
+    message: String,
+    output: Option&lt;PathBuf&gt;,
+}
+
+#[derive(Debug, Args)]
+pub struct DecodeArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+}
+
+#[derive(Debug, Args)]
+pub struct RemoveArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+}
+
+#[derive(Debug, Args)]
+pub struct PrintArgs {
+    file_path: PathBuf,
+}
+</code></pre>
+<p>泰裤辣!(</p>
+<p>然后<code>main.rs</code>改成这样:</p>
+<pre><code class="language-rust">use clap::Parser;
+mod args;
+mod chunk;
+mod chunk_type;
+mod commands;
+mod png;
+
+pub type Error = Box&lt;dyn std::error::Error&gt;;
+pub type Result&lt;T&gt; = std::result::Result&lt;T, Error&gt;;
+
+fn main() -&gt; Result&lt;()&gt; {
+    let args = args::Cli::parse();
+    println!(&quot;{:?}&quot;, args);
+    match args.subcommand {
+        args::PngMeArgs::Encode(encode_args) =&gt; commands::encode(encode_args),
+        args::PngMeArgs::Decode(decode_args) =&gt; commands::decode(decode_args),
+        args::PngMeArgs::Remove(remove_args) =&gt; commands::remove(remove_args),
+        args::PngMeArgs::Print(print_args) =&gt; commands::print(print_args),
+    }
+}
+</code></pre>
+<p><code>commands</code>是我们等下要实现的方法,如果想看看解析的结果,可以先把match那段注释掉</p>
+<p>我们来看看疗效</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20230501194749064.png" alt="image-20230501194749064" loading="lazy"></figure>
+<p>最后 利用之前实现的方法来写<code>command.rs</code></p>
+<pre><code class="language-rust">use crate::args::*;
+use crate::chunk::Chunk;
+use crate::chunk_type::ChunkType;
+use crate::png::Png;
+use crate::Result;
+use std::fs;
+use std::str::FromStr;
+
+pub fn encode(args: EncodeArgs) -&gt; Result&lt;()&gt; {
+    // check if file exists
+    if !args.file_path.exists() {
+        return Err(&quot;File does not exist&quot;.into());
+    }
+    let bytes = fs::read(args.file_path.clone())?;
+    let mut png = Png::try_from(&amp;bytes[..])?;
+    let new_chunk = Chunk::new(
+        ChunkType::from_str(&amp;args.chunk_type)?,
+        args.message.as_bytes().to_vec(),
+    );
+    png.append_chunk(new_chunk);
+    // write to file
+    if let Some(output) = args.output {
+        fs::write(output, png.as_bytes())?;
+    } else {
+        fs::write(args.file_path, png.as_bytes())?;
+    }
+    Ok(())
+}
+
+pub fn decode(args: DecodeArgs) -&gt; Result&lt;()&gt; {
+    // check if file exists
+    if !args.file_path.exists() {
+        return Err(&quot;File does not exist&quot;.into());
+    }
+    let bytes = fs::read(args.file_path)?;
+    let png = Png::try_from(&amp;bytes[..])?;
+    // find chunk
+    let chunk = png
+        .chunks()
+        .iter()
+        .find(|chunk| chunk.chunk_type().to_string() == args.chunk_type)
+        .ok_or(&quot;Chunk not found&quot;)?;
+    // decode message
+    let message: String = chunk.data().iter().map(|x| *x as char).collect();
+    println!(&quot;{}&quot;, message);
+    Ok(())
+}
+
+pub fn remove(args: RemoveArgs) -&gt; Result&lt;()&gt; {
+    // check if file exists
+    if !args.file_path.exists() {
+        return Err(&quot;File does not exist&quot;.into());
+    }
+    let bytes = fs::read(args.file_path.clone())?;
+    let mut png = Png::try_from(&amp;bytes[..])?;
+    // remove the chunk
+    png.remove_chunk(&amp;args.chunk_type)?;
+    // write to file
+    fs::write(args.file_path, png.as_bytes())?;
+    Ok(())
+}
+
+pub fn print(args: PrintArgs) -&gt; Result&lt;()&gt; {
+    // check if file exists
+    if !args.file_path.exists() {
+        return Err(&quot;File does not exist&quot;.into());
+    }
+    let bytes = fs::read(args.file_path)?;
+    let png = Png::try_from(&amp;bytes[..])?;
+    // print chunks
+    for chunk in png.chunks() {
+        println!(&quot;{}&quot;, chunk);
+    }
+    Ok(())
+}
+</code></pre>
+<p>我还是加了个chunk_type的<code>to_string</code>方法,主要不想用<code>format!</code>了(</p>
+<h2 id="最终成品展示">最终成品展示</h2>
+<p>我们使用维基的骰子图片<code>dice.png</code>作为演示</p>
+<img src="https://upload.wikimedia.org/wikipedia/commons/4/4c/Dice.png" alt="img" style="zoom:50%;" />
+<p>下面是运行的print的输出:</p>
+<pre><code class="language-bash">PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe print .\dice.png
+Cli { subcommand: Print(PrintArgs { file_path: &quot;.\\dice.png&quot; }) }
+Chunk
+        Length: 13
+        Type: IHDR
+        Data: Invalid UTF-8
+        CRC: 1807389920
+Chunk
+        Length: 4
+        Type: gAMA
+        Data: Invalid UTF-8
+        CRC: 201089285
+Chunk
+        Length: 46
+        Type: tEXt
+        Data: SoftwareXV version 3.10a-jumboFix of 20050410
+        CRC: 1223306120
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 1808155945
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 977458620
+Chunk
+        Length: 4833
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 4100335391
+Chunk
+        Length: 7
+        Type: tIME
+        Data: Invalid UTF-8
+        CRC: 3731693981
+Chunk
+        Length: 0
+        Type: IEND
+        Data:
+        CRC: 2923585666
+</code></pre>
+<p>我们要encode,不能修改现有chunk的data,不然图片就没法显示了,所以encode是往Vec最后那里加的</p>
+<pre><code class="language-bash">PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe encode .\dice.png RuSt &quot;Secret message!&quot; output.png
+Cli { subcommand: Encode(EncodeArgs { file_path: &quot;.\\dice.png&quot;, chunk_type: &quot;RuSt&quot;, message: &quot;Secret message!&quot;, output: Some(&quot;output.png&quot;) }) }
+
+PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe print .\output.png
+Cli { subcommand: Print(PrintArgs { file_path: &quot;.\\output.png&quot; }) }
+Chunk
+        Length: 13
+        Type: IHDR
+        Data: Invalid UTF-8
+        CRC: 1807389920
+Chunk
+        Length: 4
+        Type: gAMA
+        Data: Invalid UTF-8
+        CRC: 201089285
+Chunk
+        Length: 46
+        Type: tEXt
+        Data: SoftwareXV version 3.10a-jumboFix of 20050410
+        CRC: 1223306120
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 1808155945
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 977458620
+Chunk
+        Length: 4833
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 4100335391
+Chunk
+        Length: 7
+        Type: tIME
+        Data: Invalid UTF-8
+        CRC: 3731693981
+Chunk
+        Length: 0
+        Type: IEND
+        Data:
+        CRC: 2923585666
+Chunk
+        Length: 15
+        Type: RuSt
+        Data: Secret message!
+        CRC: 1157177192
+        
+PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe decode .\output.png RuSt
+Cli { subcommand: Decode(DecodeArgs { file_path: &quot;.\\output.png&quot;, chunk_type: &quot;RuSt&quot; }) }
+Secret message!
+</code></pre>
+<p>可以看到encode和decode的效果</p>
+<p>最后来remove我们添加的块:</p>
+<pre><code class="language-bash">PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe remove .\output.png RuSt
+Cli { subcommand: Remove(RemoveArgs { file_path: &quot;.\\output.png&quot;, chunk_type: &quot;RuSt&quot; }) }
+
+PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe print .\output.png
+Cli { subcommand: Print(PrintArgs { file_path: &quot;.\\output.png&quot; }) }
+Chunk
+        Length: 13
+        Type: IHDR
+        Data: Invalid UTF-8
+        CRC: 1807389920
+Chunk
+        Length: 4
+        Type: gAMA
+        Data: Invalid UTF-8
+        CRC: 201089285
+Chunk
+        Length: 46
+        Type: tEXt
+        Data: SoftwareXV version 3.10a-jumboFix of 20050410
+        CRC: 1223306120
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 1808155945
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 977458620
+Chunk
+        Length: 4833
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 4100335391
+Chunk
+        Length: 7
+        Type: tIME
+        Data: Invalid UTF-8
+        CRC: 3731693981
+Chunk
+        Length: 0
+        Type: IEND
+        Data:
+        CRC: 2923585666
+</code></pre>
+<p>完美!</p>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://LyntNy4n.github.io/tag/rust/" class="tag">
+                    Rust
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://LyntNy4n.github.io/post/toy_web_server/">
+                  <h3 class="post-title">
+                    使用Rust实现简易web服务器 从单线程到多线程
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+  <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  <script>
+    hljs.initHighlightingOnLoad()
+  </script>
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '193da042420864465789',
+        clientSecret: '36e16db48c1d62042f8e44a5155cf49bef58caa0',
+        repo: 'LyntNy4n.github.io',
+        owner: 'LyntNy4n',
+        admin: ['LyntNy4n'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

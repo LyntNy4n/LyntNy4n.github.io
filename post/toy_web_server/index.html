@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>使用Rust实现简易web服务器 从单线程到多线程 | 乱up廿四</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://LyntNy4n.github.io/favicon.ico?v=1691120291339">
+<link rel="stylesheet" href="https://LyntNy4n.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1CGSPF718Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CGSPF718Q');
+</script>
+
+
+    <meta name="description" content="PS.本文章基于https://course.rs/advance-practice1/intro.html,内容按照我自己的理解重新编排了一下,希望会有用(
+
+web服务器要做的事
+
+监听本地IP的某个端口传入的TCP连接
+对传入的连接进..." />
+    <meta name="keywords" content="Rust" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://LyntNy4n.github.io">
+        <img src="https://LyntNy4n.github.io/images/avatar.png?v=1691120291339" class="site-logo">
+        <h1 class="site-title">乱up廿四</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/LyntNy4n" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      LyntNy4n的垃圾场
+    </div>
+    <div class="site-footer">
+      114514 1919810 | <a class="rss" href="https://LyntNy4n.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">使用Rust实现简易web服务器 从单线程到多线程</h2>
+            <div class="post-date">2023-04-29</div>
+            
+            <div class="post-content" v-pre>
+              <p>PS.本文章基于https://course.rs/advance-practice1/intro.html,内容按照我自己的理解重新编排了一下,希望会有用(</p>
+<!-- more -->
+<h2 id="web服务器要做的事">web服务器要做的事</h2>
+<ol>
+<li>监听本地IP的某个端口传入的TCP连接</li>
+<li>对传入的连接进行处理</li>
+</ol>
+<p>在这里,我们的客户端是浏览器,那么TCP连接所带的数据就是HTTP请求了,GET请求报文大概长这样:</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-15897064238903.jpg" alt="-w1228" style="zoom:67%;" />
+<p>我们的玩具服务器所要做的事情很简单,假设我们监听127.0.0.1:7878,根据不同的访问的地址来返回不同的HTTP响应</p>
+<p>HTTP的响应报文是这样的:</p>
+<figure data-type="image" tabindex="1"><img src="https://www.runoob.com/wp-content/uploads/2013/11/httpmessage.jpg" alt="img" loading="lazy"></figure>
+<p>我们甚至只需要设置第一页的状态行和<code>Content-Length</code>(正文长度)就行了,然后响应正文部分就是html代码</p>
+<p>如果GET的是根目录(http://127.0.0.1:7878),设置状态行为<code>HTTP/1.1 200 OK</code>表示成功,body部分为简单的html,让浏览器显示出东西</p>
+<p>如果GET的是其他地方(比如http://127.0.0.1:7878/abcd),状态行就设置为<code>HTTP/1.1 404 NOT FOUND</code>表示没有这个网页,body部分为另一个表示404的html</p>
+<p>我们用2个html,一个是<code>hello.html</code>,用于根目录网址的响应:</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+
+&lt;head&gt;
+    &lt;meta charset=&quot;utf-8&quot;&gt;
+    &lt;title&gt;Hello!&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+    &lt;h1&gt;Hello!&lt;/h1&gt;
+    &lt;p&gt;Hi from Rust&lt;/p&gt;
+&lt;/body&gt;
+
+&lt;/html&gt;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20230429143654694.png" alt="image-20230429143654694" loading="lazy"></figure>
+<p>就是左上角显示这个而已</p>
+<p>一个是<code>404.html</code>:</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+
+&lt;head&gt;
+    &lt;meta charset=&quot;utf-8&quot;&gt;
+    &lt;title&gt;404!&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+    &lt;h1&gt;Sorry&lt;/h1&gt;
+    &lt;p&gt;404 Not found&lt;/p&gt;
+&lt;/body&gt;
+
+&lt;/html&gt;
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20230429143757386.png" alt="image-20230429143757386" loading="lazy"></figure>
+<p>显示404</p>
+<h2 id="单线程版本实现">单线程版本实现</h2>
+<p>主体部分是这样的</p>
+<pre><code class="language-rust">use std::{
+    fs,
+    io::{BufRead, BufReader, Write},
+    net::{TcpListener, TcpStream},
+}; // 先不管这些,编译器会帮你引入的
+
+fn main() {
+    let listener = TcpListener::bind(&quot;127.0.0.1:7878&quot;).expect(&quot;Can not bind&quot;);
+    for stream in listener.incoming() {
+        let stream = stream.expect(&quot;Connection failed&quot;);
+        handle_connection(stream);
+    }
+}
+</code></pre>
+<p>我们使用<code>TcpListener::bind(&quot;127.0.0.1:7878&quot;)</code>来创建一个TCP socket,因为端口可能会被占用,所以我们<code>expect</code>一下,被占用就崩溃呗</p>
+<p>然后我们迭代<code>listener.incoming()</code>,这就相当于<code>while true</code>循环等待连接,只不过用了for的语法</p>
+<p>因为有连接传入不一定能成功建立连接,所以得<code>unwrap/expect</code>一下</p>
+<p>然后我们就用自己定义的<code>handle_connection</code>来处理连接了</p>
+<pre><code class="language-rust">fn handle_connection(mut stream: TcpStream) {
+    // read stream
+    let buf_reader = BufReader::new(&amp;stream);
+    let request_line = buf_reader.lines().next().unwrap().unwrap();
+    let (status_line, file_name) = match request_line.as_str() {
+        &quot;GET / HTTP/1.1&quot; =&gt; (&quot;HTTP/1.1 200 OK&quot;, &quot;hello.html&quot;),
+        _ =&gt; (&quot;HTTP/1.1 404 NOT FOUND&quot;, &quot;404.html&quot;),
+    };
+
+    let html_content =
+        fs::read_to_string(file_name).expect(&quot;Something went wrong reading the file&quot;);
+    let html_len = html_content.len();
+    let content = format!(&quot;{status_line}\r\nContent-Length: {html_len}\r\n\r\n{html_content}&quot;);
+    stream.write_all(content.as_bytes()).expect(&quot;Write failed&quot;);
+}
+</code></pre>
+<p>Tcp传数据是以字节流的形式的,为了避免频繁读取,我们用一个缓冲区<code>BufReader</code>来存放数据,并用<code>lines()</code>返回以行为单位的String迭代器.这里第一个<code>unwrap()</code>是因为<code>next()</code>返回<code>Option</code>,第二个是io的<code>Result&lt;String&gt;</code>.我们只需要请求的第一行就可以了,所以用了<code>next()</code>而不是for遍历</p>
+<p>然后根据<code>request_line</code>的内容去给出不同的响应</p>
+<p>我的html是放在代码根目录上了,所以用<code>fs::read_to_string</code>读html就完事了</p>
+<p>还要获得html代码的长度,用来设置<code>Content-Length</code></p>
+<p>然后把这些内容拼起来就可以了,要注意<code>\r\n</code>的数量,这是报文格式规定的</p>
+<p>最后把<code>content</code>,也就是响应报文写到TCP连接就可以了</p>
+<h2 id="多线程版本实现">多线程版本实现</h2>
+<p>单线程版本太捞了,只能处理一个连接,我们可以用多线程同时处理多个连接</p>
+<p>多线程下服务器要做的跟单线程差不多:</p>
+<ol>
+<li>监听本地IP的某个端口传入的TCP连接</li>
+<li>传入的连接分配给新的线程,该线程处理这个连接</li>
+</ol>
+<p>最简单的方式是这样的:</p>
+<pre><code class="language-rust">fn main() {
+    let listener = TcpListener::bind(&quot;127.0.0.1:7878&quot;).unwrap();
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        thread::spawn(|| {
+            handle_connection(stream);
+        });
+    }
+}
+</code></pre>
+<p>简单是简单,但它会生成无上限的线程数，可能会导致资源耗尽</p>
+<p>我们希望限制创建线程的数量,第三方库会有线程池来使用,但这里我们想自己手动写一个线程池</p>
+<p>新建一个文件<code>lib.rs</code>,在这里写,我们创建一个叫<code>ThreadPool</code>的结构</p>
+<p>我们想实现这样的功能:</p>
+<ul>
+<li>初始化<code>ThreadPool::new(最大线程数)</code> 线程池创建好线程</li>
+<li><code>ThreadPool.exec(|| func)</code> 线程池把任务(函数)丢给池中的一个线程,该线程执行完之后<strong>不销毁</strong>,回到池中待命,不然频繁地增删线程开销比较大,这也是线程池的初衷(不然我们用计数器就完事了)</li>
+</ul>
+<p>如何把任务丢给线程?也就是我们要把数据发给线程(函数也是数据),我们可以使用消息队列,而且是多生产者单消费者的(多个任务可以同时提交给线程池,但是只允许一个线程拿走其中的一个任务),rust的标准库就有这样的东西<code>std::sync::mpsc</code></p>
+<p>由此可见,我们的线程池应有2个部分:</p>
+<ol>
+<li>存储线程,使用<code>Vec</code>就不错</li>
+<li>消息队列,线程池是生产者,也就是发送者<code>sender</code></li>
+</ol>
+<p>线程的类型是什么? 根据<code>thread::spawn()</code>的类型签名</p>
+<pre><code class="language-rust">pub fn spawn&lt;F, T&gt;(f: F) -&gt; JoinHandle&lt;T&gt;
+    where
+        F: FnOnce() -&gt; T,
+        F: Send + 'static,
+        T: Send + 'static,
+}
+</code></pre>
+<p>可以得到是<code>JoinHandle&lt;T&gt;</code>,其实就是线程句柄(也可以看作标识符),T是闭包返回的类型,这里我们不用返回,用<code>()</code>即可</p>
+<p>那我们直接用<code>Vec&lt;JoinHandle&lt;()&gt;&gt;</code>来存就可以了吗? 其实也可以,但是为了后续管理(比如我们想用一个id来表示线程号),我们新创建一个<code>Worker</code>结构来存:</p>
+<pre><code class="language-rust">struct Worker {
+    id: usize,
+    thread: thread::JoinHandle&lt;()&gt;,
+}
+</code></pre>
+<p>最后,<code>ThreadPool</code>长这样:</p>
+<pre><code class="language-rust">pub struct ThreadPool {
+    workers: Vec&lt;Worker&gt;,
+    sender: mpsc::Sender&lt;Job&gt;, //消息队列中发射的那一端
+}
+type Job = Box&lt;dyn FnOnce() + Send + 'static&gt;; //该类型代表传入的任务(函数)
+</code></pre>
+<p><code>Job</code>也是根据<code>thread::spawn()</code>的类型签名得到的</p>
+<p>然后就是实现了</p>
+<pre><code class="language-rust">impl ThreadPool {
+    pub fn new(size: usize) -&gt; ThreadPool {
+        assert!(size &gt; 0);
+        let (sender, receiver) = mpsc::channel();
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(size);
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&amp;receiver)));
+        }
+        ThreadPool {
+            workers,
+            sender,
+        }
+    }
+    pub fn execute&lt;F&gt;(&amp;self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job = Box::new(f);
+        self.sender.send(job).unwrap();
+    }
+}
+</code></pre>
+<p><code>mpsc::channel()</code>返回两个类型,一个就是<code>Sender</code>,一个是<code>Receiver</code>,分别代表发送/接收端</p>
+<p>mpsc中,<code>Sender</code>可以<code>clone</code>,能由多个线程拥有.但<code>Receiver</code>不行,但可以发送<strong>引用</strong>给其他线程,即使用<code>Arc</code>引用计数.而且还得保证同一个时间只有一个<code>Receiver</code> 能接收消息，否则一个任务可能同时被多个 <code>Worker</code> 执行,所以还要加上<code>Mutex</code>来互斥使用接收端.然后我们把<code>id</code>和接收端给<code>Worker</code>就完成初始化了</p>
+<p><code>execute(func)</code>接收任务,然后立即往队列里发,使用<code>send()</code>就完事了,其中一个<code>Worker</code>收到任务,就去执行</p>
+<pre><code class="language-rust">impl Worker {
+    fn new(id: usize, receiver: Arc&lt;Mutex&lt;mpsc::Receiver&lt;Job&gt;&gt;&gt;) -&gt; Worker {
+        let thread = thread::spawn(move || loop {
+            let job = receiver.lock().unwrap().recv().unwrap();
+            println!(&quot;Worker {id} got a job; executing.&quot;);
+            job();
+        });
+        Worker { id, thread }
+    }
+}
+</code></pre>
+<p>其实这里我不太喜欢这种写法,在new里就执行东西了,不知道有没有更好的做法</p>
+<p>总之,new的时候就创建了一个新线程,在里面循环接收信息,获得任务之后就执行该任务</p>
+<p>由于<code>recv()</code>是阻塞的,线程不会拼命循环去跑</p>
+<p>完</p>
+<h2 id="最后">最后</h2>
+<p>正如原文所说的,本文的实现方法并不是在 Rust 中实现 Web 服务器的最佳方法</p>
+<p>一般来说，现代化的 web 服务器往往都基于更加轻量级的协程或 async/await (异步)等模式实现</p>
+<p>完整代码可以看 https://course.rs/advance-practice1/graceful-shutdown.html#完整代码</p>
+<p>原文最后还做了一点收尾工作,我觉得没有必要,就没讲了(</p>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://LyntNy4n.github.io/tag/rust/" class="tag">
+                    Rust
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://LyntNy4n.github.io/post/grab_manga/">
+                  <h3 class="post-title">
+                    Python爬虫爬取某漫画网站的分享
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+  <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  <script>
+    hljs.initHighlightingOnLoad()
+  </script>
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '193da042420864465789',
+        clientSecret: '36e16db48c1d62042f8e44a5155cf49bef58caa0',
+        repo: 'LyntNy4n.github.io',
+        owner: 'LyntNy4n',
+        admin: ['LyntNy4n'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>Python爬虫爬取某漫画网站的分享 | 乱up廿四</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://LyntNy4n.github.io/favicon.ico?v=1691120291339">
+<link rel="stylesheet" href="https://LyntNy4n.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1CGSPF718Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CGSPF718Q');
+</script>
+
+
+    <meta name="description" content="试过用Rust写,但是不知道为什么总是403forbidden
+
+我之前是不会写爬虫的,但是因为自己用仓鼠癖,也即是把东西都囤到本地,然后因为之前有某站突然倒掉的事件(虽然之后又重开了),所以看到喜欢的漫画我都会想办法下载下来,就自己搜教程..." />
+    <meta name="keywords" content="Python" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://LyntNy4n.github.io">
+        <img src="https://LyntNy4n.github.io/images/avatar.png?v=1691120291339" class="site-logo">
+        <h1 class="site-title">乱up廿四</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/LyntNy4n" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      LyntNy4n的垃圾场
+    </div>
+    <div class="site-footer">
+      114514 1919810 | <a class="rss" href="https://LyntNy4n.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">Python爬虫爬取某漫画网站的分享</h2>
+            <div class="post-date">2023-04-13</div>
+            
+            <div class="post-content" v-pre>
+              <p>试过用Rust写,但是不知道为什么总是403forbidden</p>
+<!-- more -->
+<p>我之前是不会写爬虫的,但是因为自己用仓鼠癖,也即是把东西都囤到本地,然后因为之前有某站突然倒掉的事件(虽然之后又重开了),所以看到喜欢的漫画我都会想办法下载下来,就自己搜教程写出了一个爬虫脚本</p>
+<p><strong>注意:</strong> 由于该漫画网站是外网网站,且爬取图片会损害其利益,故本文章不会涉及该网站实际网址,脚本也不会放github上</p>
+<p>首先看看这个漫画网站的结构:</p>
+<ul>
+<li>具体某个漫画的url: https://xxx.com/漫画id/ 比如某漫画的id是2333,那么对应url就是 https://xxx.com/2333/</li>
+<li>漫画可以分为多话,url: https://xxx.com/漫画id/话数 但是第一话不用指明话数</li>
+<li>漫画的标题,作者等信息仅在第一话中展示,这些信息可以在url对应的html代码中找到</li>
+<li>图片的url: https://yyy.com/漫画对应的固定信息/漫画id/话数/图片编号.jpg 可以在html代码中找到</li>
+</ul>
+<p>根据以上信息,脚本大致就要做一下工作:</p>
+<ul>
+<li>打开url,获取网页的html代码</li>
+<li>根据漫画第一话的html,获得标题,作者,话数等信息.因为有比较固定的格式,可以使用正则表达式去获取</li>
+<li>根据各话的html获得所有图片url,也可以使用正则表达式去获取</li>
+<li>根据漫画的信息显示下载进度</li>
+</ul>
+<p>那就开始吧</p>
+<h2 id="各模块介绍">各模块介绍</h2>
+<h3 id="一些准备">一些准备</h3>
+<p>我们需要一些包和一些准备来支持上述工作,下面给出代码,python版本为3.11</p>
+<pre><code class="language-python">import os  # 用于创建文件/目录/代理等
+import re  # 导入正则表达式模块
+import urllib.request  # 导入用于打开URL的扩展库模块
+import urllib.error	   # 导入错误,用于try catch
+import opencc		   # 把繁体转为简体,因为网站是繁体中文
+
+os.environ[&quot;http_proxy&quot;] = &quot;http://127.0.0.1:7890&quot;
+os.environ[&quot;https_proxy&quot;] = &quot;http://127.0.0.1:7890&quot;
+
+t2s = opencc.OpenCC(&quot;t2s.json&quot;)
+
+headers = {
+    &quot;user-agent&quot;: &quot;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36&quot;,
+}
+</code></pre>
+<p>因为是外网网站,这里使用<code>os.environ</code>指定代理,我用的是clash,默认端口是7890</p>
+<p>第10行的<code>t2s</code>使用后续繁体转简体</p>
+<p>第12行的headers用于打开url所使用的UA,如果没有UA,一些网站会拒绝python访问</p>
+<p>urllib也可以用requests库代替,网上有其他教程,我觉得前者用起来简单一些</p>
+<h3 id="打开url">打开URL</h3>
+<pre><code class="language-python">def open_url(url: str) -&gt; str:
+    req = urllib.request.Request(
+        url,
+        headers=headers,
+    )  # 将Request类实例化并传入url为初始值，然后赋值给req 添加header，伪装成浏览器
+    # 访问url，并将页面的二进制数据赋值给page
+    page = urllib.request.urlopen(req)
+    # 将page中的内容转换为utf-8编码
+    html = page.read().decode(&quot;utf-8&quot;)
+    return html
+</code></pre>
+<p>简单直接,不解释</p>
+<h3 id="解析第一话获得漫画信息">解析第一话获得漫画信息</h3>
+<pre><code class="language-python">def get_info(first_html: str) -&gt; tuple[str, str, str, bool]:
+    pattern = r'&lt;meta name=&quot;keywords&quot; content=&quot;(.+)&quot;&gt;'
+    result = re.search(pattern, first_html)
+    assert result is not None
+    result = result[1].split(&quot;,&quot;)
+    vip_pattern = r'rel=&quot;tag&quot;&gt;會員專區'
+    vip_result = re.search(vip_pattern, first_html)
+    is_vip = vip_result is not None
+    title = t2s.convert(result[0])
+    author = result[1]
+
+    other_name_p = r&quot;其他名稱：(.+)?&lt;/p&gt;&quot;
+    other_name_result = re.search(other_name_p, first_html)
+    other_name = other_name_result[1] if other_name_result is not None else &quot;&quot;
+    return title, author, other_name, is_vip
+</code></pre>
+<p>输入漫画第一话html代码,返回漫画的标题,作者,别名,是否为vip专享</p>
+<p>为什么是第一话? 因为只有第一话的html才有这些信息,其他话就没有了</p>
+<p>各种pattern是正则表达式匹配html中的内容,比如第2行,假如漫画标题是aaa,作者是bbb,那么html的内容就会是<code>&lt;meta name=&quot;keywords&quot; content=&quot;aaa,bbb&quot;&gt;</code>.我们用正则匹配出<code>aaa,bbb</code>之后就可以<code>split</code>出来了</p>
+<p>因为漫画大都是日/韩漫,所以有日/韩文名,这时候别名就是它的日/韩文名,而标题一般是该漫画的中文名,但也有可能没有别名</p>
+<p><code>is_vip</code>表明了该漫画是否为vip专享,如果是vip专享,我们只能看到漫画的一些内容,之后的就看不到了(虽然也不是完全没办法,但我不会特地公开)</p>
+<h3 id="解析其他话的url">解析其他话的URL</h3>
+<pre><code class="language-python">def get_rest_url(html) -&gt; list[str]:
+    # 取得剩下集数的html,这个pattern不会搜索到当前的html
+    pattern = r'&lt;a href=&quot;(.+?)&quot; class=&quot;post-page-numbers&quot;'
+    result = re.findall(pattern, html)
+    return result
+</code></pre>
+<p>假如该漫画有5话,我们把第一话的html丢给该函数,就会返回2,3,4,5话的url,而不包含1话</p>
+<h3 id="解析url是哪一话">解析URL是哪一话</h3>
+<pre><code class="language-python">def get_episode(url: str) -&gt; tuple[str, int]:
+    pattern = r&quot;https://xxx.com/([0-9]+)/([0-9]+)&quot;
+    result = re.search(pattern, url)
+    if result is None:
+        return url, 1
+    episode = int(result[2])
+    main_url = f&quot;https://xxx.com/{result[1]}&quot;
+    return main_url, episode
+</code></pre>
+<p>输入漫画任意一话的url,返回该漫画的主url(也就是第一话)和当前话数</p>
+<p>为什么会有这个需求? 因为我们并不总是想要从第1话开始下载,如果该漫画现在共有5话,但是没有完结,你下载了5话.之后漫画又更新了2话,那你就应该从5话开始下载,这时候传入第5话的url,就知道你想从第5话开始下载,同时获得第1话的url(因为需要漫画的信息)</p>
+<h3 id="下载图片并保存">下载图片并保存</h3>
+<pre><code class="language-python">req = urllib.request.Request(img_url, headers=headers)
+img = urllib.request.urlopen(req)
+with open(path, &quot;wb&quot;) as f:
+	f.write(img.read())
+</code></pre>
+<p>这里没有把它们整合成函数,是因为实作中1-2行和3-4行因某些原因需要分开,后面会解释</p>
+<h2 id="总体代码">总体代码</h2>
+<pre><code class="language-python">if __name__ == &quot;__main__&quot;:
+    while True:
+        url = input(&quot;输入网址: &quot;).strip()
+        try:
+            comic = Comic(url)
+        except Exception as e:
+            print(e)
+        else:
+            comic.download()
+            print(&quot;下载完成!\n&quot;)
+</code></pre>
+<p>我们循坏获取url的输入,并创建一个<code>Comic</code>类,然后调用<code>download</code>方法. 这里用try catch让一些小错误不至于直接崩溃并打印出错误.比如输错url</p>
+<h3 id="comic类">Comic类</h3>
+<p>我们一段一段来看</p>
+<pre><code class="language-python">class Comic:
+    def __init__(self, url: str):
+        self.episode_list: list[Episode] = [] # 存放每话的url
+        self.first_html = open_url(url) #传入url的html,不一定总是第1话的url
+        rest_html = [open_url(x) for x in get_rest_url(self.first_html)]
+        self.total_episode = len(rest_html) + 1  # rest_html少了first_html自身的一话
+        self.main_url, self.first_episode = get_episode(url)
+        self.episode_html_list = [self.first_html] + rest_html[self.first_episode - 1 :]
+</code></pre>
+<p>最后一行有一点绕,我们从头到尾来看下:</p>
+<p>假设该漫画现在共有7话,我们想要第5话开始下载</p>
+<p>那我们就传入第5话的url来创建Comic类.<code>self.first_html</code>就是第5话的html,<code>rest_html</code>是除第5话外其他话的url,也就是1,2,3,4,6,7话(其他话的url不用一定在第1话的html获取,其他话也有,不然实际浏览时怎么跳转?).<code>self.total_episode</code>就是6+1=7话,然后<code>self.main_url, self.first_episode</code>就是第一话的url和当前url的话数(5). 我们需要第一话的url来提供漫画信息和拼接其他话数的url(https://xxx.com/漫画id/话数 但是第一话不用指明话数,所以话数为空,利于拼接).最后<code>self.episode_html_list</code>就是<code>self.first_html</code>加上<code>rest_html</code>从第五话开始之后的所有话数,也就是**[5]**+[1,2,3,4,<strong>6,7</strong>]中加粗部分</p>
+<p>之后是一些os的工作和信息打印</p>
+<pre><code class="language-python">        self.title, self.author, self.other_name, self.is_vip = get_info(
+            open_url(self.main_url)
+        )
+        dir_name = f&quot;[{self.author}]{self.title}&quot;
+        if self.other_name != &quot;&quot;:
+            dir_name += f&quot;｜{self.other_name}&quot;
+        # win的目录不能包含一些符号
+        dir_name = re.sub(r&quot;[\/\\\:\*\?\&quot;\&lt;\&gt;\|]&quot;, &quot; &quot;, dir_name)
+        self.dir_path = f&quot;D:/zzz/{dir_name}&quot;
+        if not os.path.exists(self.dir_path):
+            os.mkdir(self.dir_path)
+        print(f&quot;作者: {self.author} 漫画名: {self.title}&quot;)
+        if self.other_name != []:
+            print(f&quot;别名: {self.other_name}&quot;)
+        if self.is_vip:
+            print(&quot;vip漫画&quot;)
+        print(f&quot;共{self.total_episode}话,从第{self.first_episode}话开始下载&quot;)
+</code></pre>
+<p>应该挺好懂的,不多解释了</p>
+<p>最后对各个话创建<code>Episode</code>类,在该类里单独处理一话的内容</p>
+<pre><code class="language-python">        self.total_img = 0
+        for i, url in enumerate(self.episode_html_list, self.first_episode):
+            episode = Episode(url, i, self.dir_path)
+            self.episode_list.append(episode)
+            self.total_img += len(episode)
+</code></pre>
+<p>Episode类需要该话的url,该话的话数,下载目录.</p>
+<p><code>self.total_img</code>是图片总数,用于后续打印信息</p>
+<p>Comic类的download方法</p>
+<pre><code class="language-python">    def download(self):
+        already_downloaded = 0
+        for e in self.episode_list:
+            e.download(already_downloaded, self.total_img)
+            already_downloaded += len(e)
+</code></pre>
+<p>只是记录已经下载了多少图片,具体下载要给到Episode类,Episode类也有一个download方法</p>
+<h3 id="episode类">Episode类</h3>
+<p>Episode类也挺长,也一段一段看</p>
+<pre><code class="language-python">class Episode:
+    def __init__(self, html: str, episode: int, dir_path: str):
+        self.html = html
+        self.episode = episode
+        self.is_vip = is_vip_chapter(self.html)
+        self.dir_path = dir_path
+        self.set_img_list()
+
+    def __len__(self):
+        return len(self.img_list)
+
+    def set_img_list(self):
+        p = r'data-src=&quot;(https://yyy/.*?.jpg)&quot;'
+        self.img_list = re.findall(p, self.html)
+        if self.is_vip:
+            pass
+</code></pre>
+<p><code>self.is_vip</code>用于表示本话是不是vip话,前面说过有些漫画是vip话,但该漫画不是所有话都没法看,有些还是能免费看的,所以需要分别处理</p>
+<p><code>set_img_list</code>用于获取该话全部图片的url,然后根据该话是否为vip话进行处理(该文章不会涉及)</p>
+<p>下载部分</p>
+<pre><code class="language-python">    def download(self, already_downloaded: int, total_img: int):
+        for i, img_url in enumerate(self.img_list, 1):
+            self.try_download_img(img_url)
+            print(
+                &quot;\033[K&quot;
+                + &quot;\r&quot;
+                + f&quot;第{self.episode}话:{i}/{len(self)} 总共:{already_downloaded+i}/{total_img} &quot;,
+                end=&quot;&quot;,
+                flush=True,
+            )
+            
+    def try_download_img(self, img_url: str) -&gt; bool:
+        img_fullname = f'{self.episode}_{img_url.split(&quot;/&quot;)[-1]}'
+        path = f&quot;{self.dir_path}/{img_fullname}&quot;
+        if os.path.exists(path):
+            return True
+        try_time = 0
+        while True:
+            try:
+                req = urllib.request.Request(img_url, headers=headers)
+                img = urllib.request.urlopen(req)
+            except urllib.error.URLError as e:
+                try_time += 1
+                if try_time &gt;= 5:
+                    print(f&quot;{e} at {img_url}&quot;)
+                    raise e
+            else:
+                save_photo(img, path)
+                return True
+</code></pre>
+<p>这里我感觉挺屎山的,但是能用(</p>
+<p><code>download</code>基本是打印信息用的,<code>print</code>中的<code>&quot;\033[K&quot;&quot;\r&quot;</code>用于把光标退到改行的开头,<code>flush=True</code>允许覆盖当前行的内容</p>
+<p><code>try_download_img</code>输入图片的url,返回图片下载是否成功.但其实<code>download</code>里并没有使用到这个bool值,其实这个bool值在其他地方有用,但是这里不会涉及(</p>
+<p>因为我们是用代理下载图片的,有可能会抽风,这里<code>except urllib.error.URLError as e:</code>就是用来重试url错误的,以免抽风一次就直接不干了</p>
+<p>自此,整个脚本就完成了</p>
+<p>脚本运行的截图:</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/Snipaste_2023-04-13_14-56-29.jpg" alt="Snipaste_2023-04-13_14-56-29" loading="lazy"></figure>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://LyntNy4n.github.io/tag/python/" class="tag">
+                    Python
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://LyntNy4n.github.io/post/msmto/">
+                  <h3 class="post-title">
+                    MS-MTO介绍
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+  <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  <script>
+    hljs.initHighlightingOnLoad()
+  </script>
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '193da042420864465789',
+        clientSecret: '36e16db48c1d62042f8e44a5155cf49bef58caa0',
+        repo: 'LyntNy4n.github.io',
+        owner: 'LyntNy4n',
+        admin: ['LyntNy4n'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

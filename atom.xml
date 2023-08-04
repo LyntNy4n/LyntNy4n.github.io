@@ -1,0 +1,2607 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+    <id>https://LyntNy4n.github.io</id>
+    <title>乱up廿四</title>
+    <updated>2023-08-04T03:38:13.558Z</updated>
+    <generator>https://github.com/jpmonette/feed</generator>
+    <link rel="alternate" href="https://LyntNy4n.github.io"/>
+    <link rel="self" href="https://LyntNy4n.github.io/atom.xml"/>
+    <subtitle>LyntNy4n的垃圾场</subtitle>
+    <logo>https://LyntNy4n.github.io/images/avatar.png</logo>
+    <icon>https://LyntNy4n.github.io/favicon.ico</icon>
+    <rights>All rights reserved 2023, 乱up廿四</rights>
+    <entry>
+        <title type="html"><![CDATA[Golang实现LFU算法]]></title>
+        <id>https://LyntNy4n.github.io/post/lfu/</id>
+        <link href="https://LyntNy4n.github.io/post/lfu/">
+        </link>
+        <updated>2023-08-03T03:52:24.000Z</updated>
+        <summary type="html"><![CDATA[<p>毕竟上一篇文章的项目都用到了, 不妨来讲一下</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>毕竟上一篇文章的项目都用到了, 不妨来讲一下</p>
+<!-- more -->
+<h3 id="最近最不常用lfu-least-frequently-used算法">最近最不常用(LFU, Least Frequently Used)算法</h3>
+<p>以次数作为参考,如果次数相同,则淘汰最早的数据</p>
+<p>因为规则多了,LFU会比LRU复杂,而且有多种方法实现,我们只看常用的:</p>
+<ul>
+<li>双哈希表(+N个双向链表), 一个HashMap实现Get操作的O(1)复杂度，同时使用另一个HashMap，其Key为频次，Value为该频次下缓存节点的双向链表，用于保存该频次的缓存节点，用于维护最小频次</li>
+</ul>
+<p>第一个哈希表是key-value的哈希表(以下简称kv哈希表)</p>
+<img src="https://pic.leetcode-cn.com/c91b3444d84a5b175414b6cc66dc9d6ce357dfec636b917871fd48125bc5a0e1-1.jpg" alt="1.jpg" style="zoom: 80%;" />
+<p>key就是输入的key，而它的value不是一个简单的value，而是一个节点对象<code>Node</code><br>
+节点对象Node包含了key，value，以及频率，这个Node也会出现在第二个哈希表的value中。<br>
+至于为什么Node中又重复包含了key，因为某些情况下我们不是通过k-v哈希表拿到Node的，而是通过其他方式获得了Node，之后需要用Node中的key去k-v哈希表中做一些操作，所以Node中包含了一些冗余信息</p>
+<p>第二张哈希表，频率哈希表</p>
+<img src="https://pic.leetcode-cn.com/6295cf4a8078096ba9b049e17a6bf8b6be3079edbc8111363a3b3727cf37173e-2.jpg" alt="2.jpg" style="zoom:80%;" />
+<p>key是频率，也就是元素被访问的频率(被访问了1次，被访问了两次等等)，它的value是一个双向链表<br>
+刚才说的Node对象和这里的Node是一个东西,它其实是双向链表中的一个节点。<br>
+第一张图中我们介绍了Node中包含了一个冗余的key，其实它还包含了一个冗余的频率值，因为某些情况下，我们需要通过Node中的频率值，去频率哈希表中做查找，所以也需要一个冗余的频率值。</p>
+<p>两张表结合起来:</p>
+<img src="https://pic.leetcode-cn.com/bb3811c03de13fc8548a01c9ab094f5ed38d7ef9b5f5c6ef82340e222750ae92-3.jpg" alt="3.jpg" style="zoom:80%;" />
+<p>k-v哈希表中key1指向一个Node，这个Node的频率为1，位于频率哈希表中key=1下面的双链表中(处于第一个节点)</p>
+<h4 id="获取数据">获取数据</h4>
+<p>具体逻辑大致是这样：</p>
+<ul>
+<li>如果key不存在则返回-1/nil/false,根据API而定</li>
+<li>如果key存在，则返回对应的value，同时:
+<ul>
+<li>假设该key对应的Node的频率为i,将该Node的访问频率+1,并将Node从访问频率为i的链表中移出，放到频率为i+1的链表中(如果这个频率的链表不存在,就需要先创建)</li>
+<li>如果移出之后,频率i的链表为空，则从频率哈希表中移除这个链表</li>
+</ul>
+</li>
+</ul>
+<img src="https://pic.leetcode-cn.com/00ec8b79c1ada23bb3910f81d688468cd0cc5179f85f9c266a5c76e827c3cdd6-4.gif" style="zoom: 67%;" />
+<h4 id="添加更新数据">添加/更新数据</h4>
+<ul>
+<li>如果key已经存在，修改对应的value，并将访问频率+1
+<ul>
+<li>将元素从访问频率<code>i</code>的链表中移除，放到频率<code>i+1</code>的链表中</li>
+<li>如果频率<code>i</code>的链表为空，则从频率哈希表中移除这个链表</li>
+</ul>
+</li>
+<li>如果key不存在
+<ul>
+<li>缓存超过最大容量，则先删除访问频率最低的元素(如果对应链表为空也要删)，再插入新元素
+<ul>
+<li>新元素的访问频率为1，如果频率哈希表中不存在对应的链表需要创建</li>
+</ul>
+</li>
+<li>缓存没有超过最大容量，则插入新元素
+<ul>
+<li>新元素的访问频率为1，如果频率哈希表中不存在对应的链表需要创建</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<p>我们在代码实现中还需要维护一个<code>minFreq</code>的变量，用来记录LFU缓存中频率最小的元素，在缓存满的时候，可以快速定位到最小频繁的链表，以达到 <strong>O(1)</strong> 时间复杂度删除一个元素。 维护<code>minFreq</code>的具体做法是:</p>
+<ul>
+<li>更新/查找的时候，将Node频率+1之后,如果<code>minFreq</code>对应的链表不在频率哈希表中了，说明那条链表已经没有元素,被删除了.那么<code>minFreq</code>需要+1，否则<code>minFreq</code>不变。</li>
+<li>插入的时候，因为新元素的频率都是1，所以只需要将minFreq改为1即可。</li>
+</ul>
+<p>看下缓存超过最大容量时是怎么处理的:</p>
+<img src="https://pic.leetcode-cn.com/f9cbf292271ab715f5dab1f08bb0bab834fae7d24d26cc675ee0cc4fdb2f18c7-6.gif" style="zoom:67%;" />
+<p>综上所述,LFU的代码如下:</p>
+<pre><code class="language-go">// OnEvicted 当key-value被淘汰时 执行的处理函数 cachestrategy包里的
+type OnEvicted func(key string, value Lengthable)
+
+// Node 定义双向链表节点所存储的对象
+// 其实key和freq可以不用存储在Node中，但是为了一些情况下查找方便，就存了
+type Node struct {
+	key   string
+	value Value
+	freq  int
+}
+
+// Cache 是LFU算法实现的缓存
+type Cache struct {
+	maxByte  int64                    // Cache 最大容量(Byte)
+	currByte int64                    // Cache 当前容量(Byte)
+	kvMap    map[string]*list.Element // key对应的双向链表节点
+	freqMap  map[int]*list.List       // 频率对应的双向链表,链头表示最近使用
+	minFreq  int                      // 最小频率
+
+    callback cachestrategy.OnEvicted // 淘汰回调(可选)
+
+}
+
+// New 创建指定最大容量的LFU缓存
+// 当maxBytes为0时，代表cache无内存限制，无限存放
+func New(maxBytes int64, callback cachestrategy.OnEvicted) *Cache {
+	return &amp;Cache{
+		maxByte:  maxBytes,
+		kvMap:    make(map[string]*list.Element),
+		freqMap:  make(map[int]*list.List),
+		callback: callback,
+	}
+}
+
+// Len 返回当前缓存元素个数
+func (c *Cache) Len() int64 {
+	return int64(len(c.kvMap))
+}
+
+// Get 从缓存获取对应key的value。
+// ok 指明查询结果 false代表查无此key
+func (c *Cache) Get(key string) (value Value, ok bool) {
+	if elem, ok := c.kvMap[key]; ok {
+		c.updateFreq(elem)
+		node := elem.Value.(*Node)
+		return node.value, true
+	}
+	return
+}
+
+// Add 向缓存添加/更新一枚key-value
+func (c *Cache) Add(key string, value Value) {
+	kvSize := int64(len(key)) + int64(value.Len())
+	// cache 容量检查
+	for c.maxByte != 0 &amp;&amp; c.currByte+kvSize &gt; c.maxByte {
+		c.Evict()
+	}
+
+	if elem, ok := c.kvMap[key]; ok {
+		node := elem.Value.(*Node)
+		c.currByte += int64(value.Len()) - int64(node.value.Len())
+		node.value = value
+		c.updateFreq(elem)
+	} else {
+		// 新增缓存key值
+		node := &amp;Node{key: key, value: value, freq: 1}
+		// 如果freq为1的链表不存在，创建该链表
+		if _, ok := c.freqMap[1]; !ok {
+			c.freqMap[1] = list.New()
+		}
+		elem := c.freqMap[1].PushFront(node)
+		c.kvMap[key] = elem
+		// 更新minFreq
+		c.minFreq = 1
+		// 更新写入字节
+		c.currByte += kvSize
+	}
+}
+
+// Evict 淘汰一枚最低频率的缓存,如果次数相同,则淘汰最早的数据
+func (c *Cache) Evict() {
+	// 获取最低频率的链表
+	lowFreqList := c.freqMap[c.minFreq]
+	// 获取最低频率链表的最后一个节点
+	node := lowFreqList.Back().Value.(*Node)
+	// 删除最低频率链表的最后一个节点
+	lowFreqList.Remove(lowFreqList.Back())
+	// 删除kvMap中对应的key
+	delete(c.kvMap, node.key)
+	// 更新写入字节
+	c.currByte -= int64(len(node.key)) + int64(node.value.Len())
+	// 如果最低频率链表为空，删除该链表
+	if lowFreqList.Len() == 0 {
+		delete(c.freqMap, c.minFreq)
+	}
+	// 执行淘汰回调
+	if c.callback != nil {
+		c.callback(node.key, node.value)
+	}
+}
+
+func (c *Cache) updateFreq(elem *list.Element) {
+	node := elem.Value.(*Node)
+	// 将节点从原来的freq对应的链表中删除
+	c.freqMap[node.freq].Remove(elem)
+	// 更新节点的freq
+	node.freq++
+	// 如果新的freq对应的链表不存在，创建该链表
+	if _, ok := c.freqMap[node.freq]; !ok {
+		c.freqMap[node.freq] = list.New()
+	}
+	// 将节点插入到新的freq对应的链表中
+	c.freqMap[node.freq].PushFront(elem)
+	// 如果原来的freq对应的链表为空，删除该链表
+	if c.freqMap[node.freq].Len() == 0 {
+		delete(c.freqMap, node.freq)
+	}
+	// 更新minFreq
+	if c.minFreq == node.freq-1 {
+		c.minFreq++
+	}
+}
+</code></pre>
+<h2 id="参考链接">参考链接</h2>
+<p><a href="https://leetcode.cn/problems/lfu-cache/solutions/210980/chao-xiang-xi-tu-jie-dong-tu-yan-shi-460-lfuhuan-c/">Leetcode:超详细图解+动图演示 460. LFU缓存</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[分布式缓存 simple groupcache 实现篇]]></title>
+        <id>https://LyntNy4n.github.io/post/simple_groupcache_go/</id>
+        <link href="https://LyntNy4n.github.io/post/simple_groupcache_go/">
+        </link>
+        <updated>2023-08-03T03:29:27.000Z</updated>
+        <summary type="html"><![CDATA[<p>本项目代码可在 https://github.com/LyntNy4n/simple-groupcache 找到</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>本项目代码可在 https://github.com/LyntNy4n/simple-groupcache 找到</p>
+<!-- more -->
+<h2 id="原版实现">原版实现</h2>
+<h3 id="lru">LRU</h3>
+<figure data-type="image" tabindex="1"><img src="https://geektutu.com/post/geecache-day1/lru.jpg" alt="implement lru algorithm with golang" loading="lazy"></figure>
+<p>LRU机制需要一个双链表和一个哈希表实现,另外再提供一些属性来辅助</p>
+<pre><code class="language-go">type LRU struct {
+	maxByte     int64                         // 允许使用的最大内存
+	currByte    int64                         // 当前已使用的内存
+	list        *list.List                    // 双向链表
+	hashmap       map[string]*list.Element      // 键是字符串，值是双向链表中对应节点的指针
+	callback OnEvicted // 某条记录被移除时的回调函数，可以为 nil
+}
+
+// OnEvicted 当key-value被淘汰时 执行的处理函数
+type OnEvicted func(key string, value Lengthable)
+
+// Value 定义双向链表节点所存储的对象
+type Value struct {
+	key   string
+	value Lengthable
+}
+
+// Lengthable 接口指明对象可以获取自身占有内存空间大小 以字节为单位
+type Lengthable interface {
+	Len() int
+}
+</code></pre>
+<h4 id="查找">查找</h4>
+<p>查找主要有 2 个步骤，第一步是从字典中找到对应的双向链表的节点，第二步，将该节点移动到队尾</p>
+<h4 id="删除">删除</h4>
+<p>实际上是缓存淘汰。即移除最近最少访问的节点（队首）</p>
+<p>注意: 如果回调函数不为空，则调用回调函数</p>
+<h4 id="新增修改">新增/修改</h4>
+<ul>
+<li>如果键存在，则更新对应节点的值，并将该节点移到队尾。</li>
+<li>不存在则是新增场景，首先队尾添加新节点 <code>&amp;entry{key, value}</code>, 并字典中添加 key 和节点的映射关系</li>
+</ul>
+<p>还需要更新 <code>currByte</code>，如果超过了设定的最大值 <code>maxByte</code>，则移除最少访问的节点</p>
+<h3 id="byteview">ByteView</h3>
+<ul>
+<li>ByteView 只有一个数据成员，<code>b []byte</code>，b 将会存储真实的缓存值。选择 byte 类型是为了能够支持任意的数据类型的存储，例如字符串、图片等。</li>
+<li>实现 <code>Len() int</code> 方法，我们在 lru.Cache 的实现中，要求被缓存对象必须实现 Value 接口，即 <code>Len() int</code> 方法，返回其所占的内存大小。</li>
+<li><code>b</code> 是只读的，使用 <code>ByteSlice()</code> 方法返回一个拷贝，防止缓存值被外部程序修改。</li>
+</ul>
+<pre><code class="language-go">type ByteView struct {
+	b []byte
+}
+</code></pre>
+<h3 id="并发特性">并发特性</h3>
+<p>为 lru.Cache 添加并发特性,主要是使用互斥锁<code>Mutex</code>,确保一次只有一个协程(goroutine)可以访问该变量以避免冲突</p>
+<p>这样设计可以进行cache和算法的分离，如果之后实现了lfu缓存模块,只需替换cache成员即可(或者用接口)</p>
+<pre><code class="language-go">type mutexCache struct {
+	mu       sync.Mutex
+	lru      *lru.Cache
+	capacity int64 // 缓存最大容量
+}
+</code></pre>
+<h3 id="group模块">Group模块</h3>
+<h4 id="回调函数-retriever">回调函数 Retriever</h4>
+<p>如果缓存不存在，应从数据源（文件，数据库等）获取数据并添加到缓存中。因此，我们需要设计一个回调函数，在缓存不存在时，调用这个函数，得到源数据。</p>
+<pre><code class="language-go">// Retriever 要求对象实现从数据源获取数据的能力
+type Retriever interface {
+	retrieve(string) ([]byte, error)
+}
+
+type RetrieverFunc func(key string) ([]byte, error)
+
+// RetrieverFunc 通过实现retrieve方法，使得任意匿名函数func
+// 通过被RetrieverFunc(func)类型强制转换后，实现了 Retriever 接口的能力
+func (f RetrieverFunc) retrieve(key string) ([]byte, error) {
+	return f(key)
+}
+</code></pre>
+<h4 id="group-的定义">Group 的定义</h4>
+<p>Group 提供命名管理缓存/填充缓存的能力</p>
+<pre><code class="language-go">type Group struct {
+	name      string // 命名空间
+	cache     *mutexCache
+	retriever Retriever
+	server    Picker               // 实现了Picker接口的Server
+	flight    *singlefilght.Flight // 防止缓存击穿
+}
+
+var (
+	mu     sync.RWMutex // 管理读写groups并发控制
+	groups = make(map[string]*Group)
+)
+</code></pre>
+<p><code>server</code>和<code>flight</code>会在之后讲解</p>
+<p>group的<code>get</code>方法流程:</p>
+<ol>
+<li>从<code>cache</code>中查找缓存，如果存在则返回缓存值</li>
+<li>缓存不存在，则调用 <code>load</code> 方法，它会调用 <code>getLocally</code>方法（分布式场景下会调用 <code>getFromPeer</code> 从其他节点获取）
+<ul>
+<li><code>getLocally</code> 调用用户回调函数 <code>g.retriever.retrieve()</code> 获取源数据，并且将源数据添加到缓存 <code>cache</code> 中</li>
+<li><code>getFromPeer</code> 通过<code>server</code>选择一个合适节点,然后向该节点请求数据,但不添加到缓存中</li>
+</ul>
+</li>
+</ol>
+<p>这个get方法其实就是一个请求,所以会在一开始使用singlefilght的<code>Fly</code>方法防止击穿</p>
+<h3 id="singlefilght-防击穿模块">singlefilght 防击穿模块</h3>
+<p>将所有由key产生的请求抽象成<code>flight</code>,这个flight只会起飞一次(single) 这样就可以缓解击穿的可能性</p>
+<p><code>flight</code>载有我们要的缓存数据 称为<code>packet</code>,也可以叫<code>call</code>,因为对应着一次请求</p>
+<pre><code class="language-go">type packet struct {
+	wg  sync.WaitGroup
+	val interface{}
+	err error
+}
+</code></pre>
+<p><code>packet</code>要能做这几个事情：</p>
+<ol>
+<li>能够存值，第一个请求回来的时候，值赋给 <code>val</code></li>
+<li>要能够同步，第一个请求下去之后，后面的请求发现有同名 <code>key</code> 下去了，那么就地等待，这里通过 wg 来同步这个行为。第一个请求回来之后，通过 wg 来唤醒</li>
+<li>要能够存 error ，如果有错误，那么要能存起来</li>
+</ol>
+<pre><code class="language-go">type Flight struct {
+	mu     sync.Mutex
+	flight map[string]*packet
+}
+</code></pre>
+<p><code>Flight</code> 结构是用来存储 k-v 的，<code>key</code> 是用户请求 <code>key</code> ，value 是请求，抽象为了 <code>packet</code> 。</p>
+<p>最后就是防止击穿的逻辑了：</p>
+<ul>
+<li>如果 <code>map</code> 里面有同名 <code>key</code> ,那说明已经有人在查了，那么就地等待，等唤醒之后，直接返回值</li>
+<li>如果 <code>map</code> 没有同名 <code>key</code>,那说明没人查过,那就是要这个请求亲自去查.我们创建一个 <code>packet</code> 对象，把请求自己的 key 放进去，这样别人就能感知到他已经去服务端拿数据了</li>
+</ul>
+<pre><code class="language-go">// Fly 负责key航班的飞行 fn是获取packet的方法
+func (f *Flight) Fly(key string, fn func() (interface{}, error)) (interface{}, error) {
+	f.mu.Lock()
+	// 结构未初始化
+	if f.flight == nil {
+		f.flight = make(map[string]*packet)
+	}
+	// 航班已起飞(已缓存该key的数据) 则等待
+	if p, ok := f.flight[key]; ok {
+		f.mu.Unlock()
+		p.wg.Wait() // 等待航班完成
+		return p.val, p.err
+	}
+
+	// 航班未起飞(未缓存该key的数据) 则创建packet
+	p := new(packet)
+	p.wg.Add(1)
+	f.flight[key] = p
+	f.mu.Unlock()
+	// 创建packet后,航班起飞(获取数据)
+	p.val, p.err = fn()
+	p.wg.Done() // 航班完成
+
+	f.mu.Lock()
+	delete(f.flight, key)
+	f.mu.Unlock()
+	return p.val, p.err
+}
+</code></pre>
+<h3 id="一致性哈希模块">⼀致性哈希模块</h3>
+<p>使用一个结构来维护算法</p>
+<pre><code class="language-go">// HashFunc 定义哈希函数输入输出
+type HashFunc func(data []byte) uint32
+
+// Consistency 维护peer与其hash值的关联
+type Consistency struct {
+	hash     HashFunc       // 哈希函数依赖
+	replicas int            // 虚拟节点个数(防止数据倾斜)
+	ring     []int          // uint32哈希环
+	hashmap  map[int]string // hashValue -&gt; peerName
+}
+</code></pre>
+<p><code>hash</code>可以使用自定义的 Hash 函数，也方便测试时替换，默认为 <code>crc32.ChecksumIEEE</code> 算法</p>
+<h4 id="添加节点">添加节点</h4>
+<pre><code class="language-go">// Register 将各个peer注册到哈希环上
+func (c *Consistency) Register(peersName ...string) {
+	for _, peerName := range peersName {
+		for i := 0; i &lt; c.replicas; i++ {
+			hashValue := int(c.hash([]byte(strconv.Itoa(i)+peerName)))
+			c.ring = append(c.ring, hashValue)
+			c.hashmap[hashValue] = peerName
+		}
+	}
+	sort.Ints(c.ring)
+}
+</code></pre>
+<p>对每一个真实节点 <code>key</code>，对应创建 <code>m.replicas</code> 个虚拟节点，虚拟节点的名称是<code>strconv.Itoa(i) + key</code>，即通过添加编号的方式区分不同虚拟节点</p>
+<p>比如有3个节点<code>p1,p2,p3</code>,<code>replicas</code>设为3,那么<code>p1</code>在哈希环上将有3个对应节点:<code>1p1,2p1,3p1</code></p>
+<h4 id="计算key归哪个节点">计算key归哪个节点</h4>
+<pre><code class="language-go">// GetPeer 计算key应缓存到的peer
+func (c *Consistency) GetPeer(key string) string {
+	if len(c.ring) == 0 {
+		return &quot;&quot;
+	}
+
+	hashValue := int(c.hash([]byte(key)))
+	// 二分查找, 找到第一个大于等于(等效于顺时针)hashValue的hash值
+	idx := sort.Search(len(c.ring), func(i int) bool {
+		return c.ring[i] &gt;= hashValue
+	})
+	// 第一个大于等于的hash值的索引可能超出环的长度, 需要取模
+	return c.hashmap[c.ring[idx%len(c.ring)]]
+}
+</code></pre>
+<h4 id="节点选择">节点选择</h4>
+<p>有了一致性哈希算法,我们就可以把数据分到不同的节点上了.自然节点自身就需要有获取其他节点的能力</p>
+<pre><code class="language-go">// Picker 定义了获取分布式节点的能力
+type Picker interface {
+	PickPeer(key string) (Fetcher, bool)
+}
+
+// Fetcher 定义了从远端获取缓存的能力
+// 所以每个Peer应实现这个接口
+type Fetcher interface {
+	Fetch(group string, key string) ([]byte, error)
+}
+</code></pre>
+<p><code>PickPeer()</code> 方法用于根据传入的 key 选择相应节点, 因为所有节点都实现了<code>Fetcher</code>,所以就可以从远端获取缓存了</p>
+<p>一般来说,服务端需要定义<code>PickPeer</code>,客户端需要定义<code>Fetch</code>. 而他们的实现会因采用通信方式的不同而不同,所以这个接口会在客户端/服务端的地方实现</p>
+<h3 id="服务端客户端设计">服务端/客户端设计</h3>
+<p>分布式缓存需要实现节点间通信，如果一个节点启动了服务端，那么这个节点就可以被其他节点访问</p>
+<p>建立基于 HTTP 的通信机制是比较常见和简单的做法,但是也可以使用GRPC通信</p>
+<p>无论采用什么通信机制,<strong>服务端一般需要提供以下方法:</strong></p>
+<ol>
+<li><code>NewServer</code>,创建服务器</li>
+<li><code>Start</code>,初始化socket并开始监听,<strong>注册各种服务</strong>,启动服务器</li>
+<li><code>Stop</code>,停止服务器,清理资源</li>
+<li><code>Get</code>,输入参数:<code>group string,key string</code>,因为有不同的group,该方法就是负责找到对应的group,然后调用<code>group.Get(key)</code>,返回响应(<code>ByteView</code>)</li>
+<li><code>SetPeers</code>,将各个远端主机IP配置到Server里,这样Server才可以选择到它们</li>
+<li><code>PickPeer</code>,就是节点选择,根据一致性哈希选举出key应存放在的<code>Fetcher</code>(节点)</li>
+</ol>
+<p>注册各种服务环节要做的事情挺多:</p>
+<ul>
+<li>
+<p>如果使用HTTP通信,就要注册不同url的handle</p>
+</li>
+<li>
+<p>如果使用GRPC通信,就要把rpc服务注册到grpc中,这样grpc收到request可以分发给server处理</p>
+</li>
+<li>
+<p>分布式服务注册/发现:需要使用一种机制,让节点知道彼此的存在,可以访问到其他节点</p>
+<p>这种机制要么自己实现(哈希表+锁),要么使用现成的,比如<code>etcd</code></p>
+</li>
+</ul>
+<p><strong>客户端一般需要提供以下方法:</strong></p>
+<ol>
+<li><code>NewClient</code>,新建客户端</li>
+<li><code>Fetch</code>,从远端节点获取缓存.该方法需要依靠<strong>发现服务</strong>,获取远端节点的连接,这样才可以往该连接调用方法,获取响应</li>
+</ol>
+<h3 id="grpc">GRPC</h3>
+<p>因为我们使用<code>etcd</code>,它就是依靠grpc通信的,那我们就使用grpc,而且如果使用grpc网关,我们还可以获得http通信的功能</p>
+<p>定义<code>groupcache.proto</code>文件,放在了<code>proto</code>目录</p>
+<pre><code class="language-protobuf">syntax = &quot;proto3&quot;;
+
+package pb;
+
+option go_package = &quot;simple-groupcache/pb&quot;;
+
+message GetRequest {
+  string group = 1;
+  string key = 2;
+}
+
+message GetResponse {
+  bytes value = 1;
+}
+
+service Groupcache {
+  rpc Get(GetRequest) returns (GetResponse);
+}
+</code></pre>
+<p>使用protoc生成对应代码:</p>
+<pre><code class="language-shell">protoc --proto_path=proto --go_out=pb --go_opt=paths=source_relative \
+--go-grpc_out=pb --go-grpc_opt=paths=source_relative \
+proto/*.proto
+</code></pre>
+<h4 id="服务端">服务端</h4>
+<pre><code class="language-go">//全局设定
+const (
+	defaultAddr     = &quot;127.0.0.1:6324&quot;
+	defaultReplicas = 50
+)
+
+var (
+	defaultEtcdConfig = clientv3.Config{
+		Endpoints:   []string{&quot;localhost:2379&quot;},
+		DialTimeout: 5 * time.Second,
+	}
+)
+
+// server 和 Group 是解耦合的 所以server要自己实现并发控制
+type server struct {
+	pb.UnimplementedGroupcacheServer
+
+	addr       string     // format: ip:port
+	status     bool       // true: running false: stop
+	stopSignal chan error // 通知registry revoke服务
+	mu         sync.Mutex
+	consHash   *consistenthash.Consistency // 一致性哈希
+	clients    map[string]*client          // 保存各个远端主机的client
+}
+</code></pre>
+<p>比较重要的是<code>addr,mu,consHash,clients</code>,其他是配合etcd服务使用的</p>
+<p>代码中提到<code>server 和 Group 是解耦合的</code>,你可以这样理解: group是一个有着名字的缓存空间,如果没有分布式,group是完全可以去掉server的.如果需要分布式,那group就需要有与其他group通信的能力,这个能力就是server给予的,所以使用的时候,还需要调用<code>RegisterSvr</code></p>
+<pre><code class="language-go">// RegisterSvr 为 Group 注册 Server
+func (g *Group) RegisterSvr(p Picker) {
+	if g.server != nil {
+		panic(&quot;group had been registered server&quot;)
+	}
+	g.server = p
+}
+</code></pre>
+<h5 id="新建">新建</h5>
+<pre><code class="language-go">// NewServer 创建cache的svr 若addr为空 则使用defaultAddr
+func NewServer(addr string) (*server, error) {
+	if addr == &quot;&quot; {
+		addr = defaultAddr
+	}
+	if !validPeerAddr(addr) {
+		return nil, fmt.Errorf(&quot;invalid addr %s, it should be x.x.x.x:port&quot;, addr)
+	}
+	return &amp;server{addr: addr}, nil
+}
+</code></pre>
+<p>这个方法只是设置了<code>addr</code>,其他都是默认值</p>
+<h5 id="启动">启动</h5>
+<pre><code class="language-go">// Start 启动cache服务
+func (s *server) Start() error {
+	s.mu.Lock()
+	if s.status {
+		s.mu.Unlock()
+		return fmt.Errorf(&quot;server already started&quot;)
+	}
+    // 1. 设置status为true 表示服务器已在运行
+	s.status = true
+    // 2. 初始化stop channal,这用于通知registry停止keepalive
+	s.stopSignal = make(chan error)
+
+	port := strings.Split(s.addr, &quot;:&quot;)[1]
+    // 3. 初始化tcp socket并开始监听
+	lis, err := net.Listen(&quot;tcp&quot;, &quot;:&quot;+port)
+	if err != nil {
+		return fmt.Errorf(&quot;failed to listen: %v&quot;, err)
+	}
+    // 4. 启动grpc服务,注册rpc服务至grpc 这样grpc收到request可以分发给server处理
+	grpcServer := grpc.NewServer()
+	pb.RegisterGroupcacheServer(grpcServer, s)
+	
+	// 注册服务/撤销服务
+	go func() {
+		// 5. 将自己的服务名/Host地址注册至etcd 这样client可以通过etcd找到其他节点
+		// Register服务会一直阻塞 阻塞即意味着在此期间节点注册成功,可以被发现
+		err := registry.Register(&quot;cache&quot;, s.addr, s.stopSignal)
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+		// 撤销服务 关闭channel和tcp socket
+		close(s.stopSignal)
+		err = lis.Close()
+		if err != nil {
+			log.Fatalf(err.Error())
+		}
+		log.Printf(&quot;[%s] Revoke service and close tcp socket ok.&quot;, s.addr)
+	}()
+
+	s.mu.Unlock()
+	// 6. 启动grpc服务
+	if err := grpcServer.Serve(lis); s.status &amp;&amp; err != nil {
+		return fmt.Errorf(&quot;failed to serve: %v&quot;, err)
+	}
+	return nil
+}
+</code></pre>
+<p><code>registry.Register()</code>方法有关etcd,但是有个通用模板,照着写就可以的</p>
+<h5 id="设定远端节点">设定远端节点</h5>
+<pre><code class="language-go">// SetPeers 将各个远端主机IP配置到Server里
+// 这样Server就可以Pick他们了
+// 注意: 此操作是*覆写*操作！
+// 注意: peersIP必须满足 x.x.x.x:port的格式
+func (s *server) SetPeers(peersAddr ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// 初始化一致性哈希并注册各个节点
+	s.consHash = consistenthash.New(defaultReplicas, nil)
+	s.consHash.Register(peersAddr...)
+	// 初始化各个节点的client
+	s.clients = make(map[string]*client)
+	for _, peerAddr := range peersAddr {
+		if !validPeerAddr(peerAddr) {
+			panic(fmt.Sprintf(&quot;[peer %s] invalid address format, it should be x.x.x.x:port&quot;, peerAddr))
+		}
+		service := fmt.Sprintf(&quot;cache/%s&quot;, peerAddr)
+		s.clients[peerAddr] = NewClient(service)
+	}
+}
+</code></pre>
+<h5 id="根据key选择节点">根据key选择节点</h5>
+<pre><code class="language-go">// PickPeer 根据一致性哈希选举出key应存放在的节点
+// return nil,false 代表从本地获取cache
+func (s *server) PickPeer(key string) (Fetcher, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	peerAddr := s.consHash.GetPeer(key)
+	// Pick itself
+	if peerAddr == s.addr {
+		log.Printf(&quot;ooh! pick myself, I am %s\n&quot;, s.addr)
+		return nil, false
+	}
+	log.Printf(&quot;[cache %s] pick remote peer: %s\n&quot;, s.addr, peerAddr)
+	return s.clients[peerAddr], true
+}
+
+// 测试Server是否实现了Picker接口
+var _ Picker = (*server)(nil)
+</code></pre>
+<h5 id="停止">停止</h5>
+<pre><code class="language-go">// Stop 停止server运行 如果server没有运行 这将是一个no-op
+func (s *server) Stop() {
+	s.mu.Lock()
+	if !s.status {
+		s.mu.Unlock()
+		return
+	}
+	s.stopSignal &lt;- nil // 发送停止keepalive信号
+	s.status = false    // 设置server运行状态为stop
+	s.clients = nil     // 清空一致性哈希信息 有助于垃圾回收
+	s.consHash = nil
+	s.mu.Unlock()
+}
+</code></pre>
+<h4 id="客户端">客户端</h4>
+<p>客户端比服务端简单得多</p>
+<pre><code class="language-go">type client struct {
+	name string // 服务名称 pcache/ip:addr
+}
+
+func NewClient(service string) *client {
+	return &amp;client{name: service}
+}
+</code></pre>
+<h5 id="获取节点缓存">获取节点缓存</h5>
+<pre><code class="language-go">// Fetch 从remote peer获取对应缓存值
+func (c *client) Fetch(group string, key string) ([]byte, error) {
+	// 创建一个etcd client
+	cli, err := clientv3.New(defaultEtcdConfig)
+	if err != nil {
+		return nil, err
+	}
+	defer cli.Close()
+	// 发现服务 取得与服务的连接
+	conn, err := registry.EtcdDial(cli, c.name)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	// 创建grpc client
+	grpcClient := pb.NewGroupcacheClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	// 发送请求
+	resp, err := grpcClient.Get(ctx, &amp;pb.GetRequest{
+		Group: group,
+		Key:   key,
+	})
+	if err != nil {
+		return nil, fmt.Errorf(&quot;could not get %s/%s from peer %s&quot;, group, key, c.name)
+	}
+
+	return resp.GetValue(), nil
+}
+
+// 测试Client是否实现了Fetcher接口
+var _ Fetcher = (*client)(nil)
+</code></pre>
+<p><code>registry.EtcdDial</code>同样和ectd有关,这里不详细说,一时半会也说不明白</p>
+<h2 id="新增功能">新增功能</h2>
+<h3 id="缓存淘汰策略">缓存淘汰策略</h3>
+<p>除了LRU,还有其他常用的策略:</p>
+<ol>
+<li>FIFO：先进先出就是每次淘汰最早添加的记录，但是很多记录添加地早也访问的很频繁，因此命中率不⾼</li>
+<li>LFU：淘汰缓存中使⽤频率最低的，LFU认为如果数据过去被访问多次，那么将来被访问的频率也会更⾼。LFU的实现需要维护⼀个按照访问次数排序的队列，每次访问后元素的访问次数改变，队列重新排序。</li>
+<li>ARC：ARC 介于 LRU 和 LFU 之间，借助 LRU 和 LFU 基本思想实现，以获得可⽤缓存的最佳使⽤</li>
+</ol>
+<p>我们不妨尝试添加LFU和ARC策略</p>
+<p>首先我们需要一个接口,这样可以在<code>mutexCache</code>中方便切换策略</p>
+<p>新建文件<code>simple-groupcache/cache-strategy/icache.go</code>,把原版LRU中的一些代码剪切过来</p>
+<pre><code class="language-go">package cachestrategy
+
+// Lengthable 接口指明对象可以获取自身占有内存空间大小 以字节为单位
+type Lengthable interface {
+	Len() int
+}
+
+// OnEvicted 当key-value被淘汰时 执行的处理函数
+type OnEvicted func(key string, value Lengthable)
+
+type CacheStrategy interface {
+	Get(key string) (value Lengthable, ok bool)
+	Add(key string, value Lengthable)
+}
+
+</code></pre>
+<h4 id="lru修改">LRU修改</h4>
+<p>然后为了后面的ARC实现,需要修改和添加一些方法,另外<code>currByte</code>等字段改成公共的</p>
+<pre><code class="language-go">type Cache struct {
+	MaxByte          int64 // Cache 最大容量(Byte)
+	CurrByte         int64 // Cache 当前容量(Byte)
+	hashmap          map[string]*list.Element
+	doublyLinkedList *list.List // 链头表示最近使用
+
+	callback cachestrategy.OnEvicted // 淘汰回调
+}
+
+// 确保Cache实现了CacheStrategy接口
+var _ cachestrategy.CacheStrategy = (*Cache)(nil)
+
+//添加Contains 看看key存不存在(不访问)
+func (c *Cache) Contains(key string) bool {
+	if _, ok := c.hashmap[key]; ok {
+		return true
+	}
+	return false
+}
+
+//添加Remove 删除特定key的数据
+func (c *Cache) Remove(key string) {
+	if elem, ok := c.hashmap[key]; ok {
+		entry := elem.Value.(*Node)
+		delete(c.hashmap, key)
+		c.doublyLinkedList.Remove(elem)
+		c.CurrByte -= int64(len(key)) + int64(entry.value.Len())
+	}
+}
+
+// 修改Evict 返回淘汰后的kv
+func (c *Cache) Evict() (string, cachestrategy.Lengthable) {
+	tailElem := c.doublyLinkedList.Back()
+	if tailElem != nil {
+		entry := tailElem.Value.(*Node)
+		k, v := entry.key, entry.value
+		delete(c.hashmap, k)                         // 移除映射
+		c.doublyLinkedList.Remove(tailElem)          // 移除缓存
+		c.CurrByte -= int64(len(k)) + int64(v.Len()) // 更新占用内存情况
+		// 移除后的善后处理
+		if c.callback != nil {
+			c.callback(k, v)
+		}
+		return k, v
+	}
+	return &quot;&quot;, nil
+}
+</code></pre>
+<h4 id="lfu">LFU</h4>
+<p>实现细节不多说,可以去网上搜,或者看github上的代码</p>
+<h4 id="arc">ARC</h4>
+<p>ARC是一种平衡访问时间优先和访问频率优先的策略,而且LRU和LFU都会用到,更复杂,详情不解释了</p>
+<h4 id="修改其他地方">修改其他地方</h4>
+<p>mutexCache模块中<code>newCache</code>需要修改,在这里选择好淘汰策略,也就不延迟初始化了</p>
+<pre><code class="language-go">func newCache(capacity int64, cacheStrategy string) *mutexCache {
+	var cache cachestrategy.CacheStrategy
+	switch cacheStrategy {
+	case &quot;lru&quot;:
+		cache = lru.New(capacity, nil)
+	case &quot;lfu&quot;:
+		cache = lfu.New(capacity, nil)
+    case &quot;arc&quot;:
+		cache = arc.New(capacity, nil)
+	default:
+		cache = lru.New(capacity, nil)
+	}
+	return &amp;mutexCache{
+		cache:    cache,
+		capacity: capacity,
+	}
+}
+</code></pre>
+<p>然后其他文件跟<code>newCache</code>有关的也要加上<code>cacheStrategy</code>这个参数,这个修改就简单了,不多说</p>
+<h2 id="参考链接">参考链接</h2>
+<p><a href="https://geektutu.com/post/geecache.html">Geecache</a> 7天用Go从零实现分布式缓存GeeCache教程</p>
+<p><a href="https://github.com/peanutzhen/peanutcache">peanutcache</a> 基于Geecache和groupcache的改版,加入了grpc和etcd等内容,非常详细的注释</p>
+<p><a href="https://github.com/bluele/gcache">gcache</a> 基于Geecache的改版,加入了更多的缓存淘汰策略</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[分布式缓存 simple groupcache 介绍篇]]></title>
+        <id>https://LyntNy4n.github.io/post/simple_groupcache/</id>
+        <link href="https://LyntNy4n.github.io/post/simple_groupcache/">
+        </link>
+        <updated>2023-08-03T03:26:02.000Z</updated>
+        <summary type="html"><![CDATA[<p>本项目simple groupcache是groupcache的改版实现,为了简单起见,简化了一些模块的同时又增加了一些功能</p>
+<p>我们先实现简化后原版的功能,然后再去增加功能</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>本项目simple groupcache是groupcache的改版实现,为了简单起见,简化了一些模块的同时又增加了一些功能</p>
+<p>我们先实现简化后原版的功能,然后再去增加功能</p>
+<!-- more -->
+<h2 id="groupcache-简介">groupcache 简介</h2>
+<p>groupcache 是一个基于Golang的小巧的 kv 存储库，最大的特点是<strong>没有设置/更新/删除内容的接口</strong>,带来的好处就是没有覆盖更新带来的一致性问题，但正因如此，这个库是有自己的特殊场景的，需要业务自己满足这种场景的使用(不频繁的更新,比如缓存一些静态文件，用文件 md5 作为 key，value 就是文件)</p>
+<p><strong>groupcache 没有更新和删除接口，那么空间岂不是会越来越多？</strong></p>
+<p>groupcache 没有 set，update，delete 接口只是让用户无法更新和删除已经缓存的内容而已，而不是说设置进去的 kv 要永久保存，缓存空间肯定不是无限的，groupcache 内部是通过 LRU 来管理内容</p>
+<p><strong>groupcache 没有 set 接口，那内容是怎么设置进去?</strong></p>
+<ol>
+<li>初始化的时候，就需要明确当 key miss 的时候，怎么获取到内容的手段，把这个手段配置好是前提</li>
+<li>get 调用的时候，当 key miss 的时候，就会调用初始化的获取手段来获取数据，如果 hit 的话，那么就直接返回</li>
+</ol>
+<h2 id="架构设计">架构设计</h2>
+<p>主要分为了 Group 模块，缓存模块，分布式⼀致性等模块</p>
+<h3 id="group模块">Group模块</h3>
+<p>groupcache 封装 <code>Group</code> 这个对象来对外提供服务，Group提供命名管理缓存/填充缓存的能力</p>
+<p>这个结构提供的函数就是对外使用的 API, 但没有更改/删除的接口</p>
+<h3 id="client-server">client &amp; server</h3>
+<p>groupcache 实现的库是 client 也是 server,即groupcache 实现的是一个分布式的无中心化的缓存集群。每个节点，既作为 server ，对外提供 api 访问，返回 key 的数据,也能作为客户端访问其他节点(去问其他节点有没有缓存数据)</p>
+<h3 id="缓存模块">缓存模块</h3>
+<p>缓存模块是数据实际存储的位置，其中实现缓存淘汰算法，过期机制，回调机制等，缓存模块与其他部分是解耦的，因此可以根据不同场景选择不同的缓存淘汰算法（默认lru）。<br>
+groupcache本身的实现中，缓存值只淘汰不更新，也没有超时淘汰机制，通过这样来简化设计，并没有指定缓存的移除操作。</p>
+<h3 id="byteview-模块">ByteView 模块</h3>
+<p>如果获取缓存值时直接返回缓存值的切⽚，那个切⽚只是原切⽚浅拷⻉，真正的缓存值就可能被外部恶意修改。所以⽤byteview进⾏⼀层封装，<strong>返回缓存值原切⽚的深拷⻉</strong></p>
+<h3 id="一致性哈希模块">⼀致性哈希模块</h3>
+<p>实现<strong>⼀致性哈希算法</strong>是从单节点走向分布式节点的一个重要的环节，其将机器节点组成哈希环，为每个节点提供了从其他节点获取缓存的能⼒</p>
+<p>一致性哈希算法: 在新增/删除节点时，只需要重新定位该节点附近的一小部分数据，而不需要重新定位所有的节点</p>
+<p>算法将 key 映射到 2<sup>32</sup> 的空间中，将这个数字首尾相连，形成一个环</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/bVbA7aH_W2xEX_1x_2n_Compressed_jpeg.webp" alt="bVbA7aH_W2xEX_1x_2n_Compressed_jpeg" loading="lazy"></figure>
+<p><strong>将对象和服务器都放置到同一个哈希环后，在哈希环上顺时针查找距离这个对象的 hash 值最近的机器，即是这个对象所属的机器</strong></p>
+<figure data-type="image" tabindex="2"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/bVbA7aI_W2xEX_1x_2n_Compressed_jpeg.webp" alt="bVbA7aI_W2xEX_1x_2n_Compressed_jpeg" loading="lazy"></figure>
+<p>增加一台服务器 cs4的情况下,只有 o3 对象需要重新分配</p>
+<p>如果使用简单的取模方法，当新添加服务器时可能会导致大部分缓存失效</p>
+<h3 id="防击穿模块">防击穿模块</h3>
+<p>一个 k-v 存储，客户端先看是否有 k 的缓存，如果有，那么直接给用户返回，如果没有，则向后端存储请求。</p>
+<p>如果突然来了1万个这样的请求，发现都是 miss，那么都去后端拉数据了，这种就可能会一下导致后端压力暴涨。其实，这种场景，只要第一个人发下去了就行了，其他的请求等着这个请求返回就好了，大家都是请求同一个值。</p>
+<p>内部实现了 <code>singlefilght</code> 就是解决这个问题的</p>
+<h3 id="协商填充本项目不实现">协商填充(本项目不实现)</h3>
+<p>固定的 key 由固定的节点服务，这个相当于一个绑定。举个例子，A，B，C 三个节点，如果请求发给了 A，节点 A 哈希计算发现这个请求应该是 B 节点执行，那么会转给 B 执行。这样只需要 B 节点把这个请求处理好即可，这样能防止在缓存 miss 的时候，整个系统节点的惊群效应。</p>
+<p>通过这种协商才能保证请求聚合发到 B，同一时间 B 收到大量相同 key 的请求，无论自己有没有，都能很好处理，因为有之前说的防击穿的措施：</p>
+<ul>
+<li>如果 B 有，立马返回就行；</li>
+<li>如果没有也只是放一个请求下去，后端压力可以很小的；</li>
+</ul>
+<h3 id="预热机制本项目不实现">预热机制(本项目不实现)</h3>
+<p>这个其实是和协商填充一起达到的效果，请求实现了节点绑定，那么在分布式集群的模式下，很容易实现预热的效果，你这个请求大概率是已经被其他节点缓存了的。</p>
+<h3 id="热点数据多节点备份本项目不实现">热点数据多节点备份(本项目不实现)</h3>
+<p>分布式缓存系统中，一般需要从两个层面考虑热点均衡的问题：</p>
+<ol>
+<li>大量的 key 是否均衡的分布到节点；这个指请求数量的分布均衡</li>
+<li>某些 key 的访问频率也是有热点的，也是不均衡的；</li>
+</ol>
+<p>针对第一点，不同节点会负责特定的 key 集合的查询请求，一般来讲只要哈希算法还行， key 的分布是均衡的，但是针对第二点，如果某些 key 属于热点数据而被大量访问，这很会导致压力全都在某个节点上。</p>
+<p>groupcache 有一个热点数据自动扩展机制用来解决这个问题，针对每个节点，除了会缓存本节点存在且大量访问的 key 之外，也会缓存那些不属于节点的（但是被频繁访问）的 key，缓存这些 key 的对象被称为 hotcache。</p>
+<p>协商机制和多节点备份这两个特性是 groupcache 的杀手级特性。</p>
+<h2 id="大致流程">大致流程</h2>
+<ol>
+<li>当 Group 模块接收到请求时，当前节点先到本地的主缓存中查找是否有⽬标值。</li>
+<li>如果没有再查看此节点的热点缓存中是否有，如果也没有，就需要到远程伙伴节点去获取</li>
+<li>通过⼀致性哈希计算该 key 的哈希值，找到哈希环上相应的节点，执⾏该节点的远程调⽤函数获取值，并把该值加⼊到当前节点的热点缓存中</li>
+<li>如果该key在哈希环中对应的就是当前节点，那么就需要从本地的数据源去获取数据后加载到当前节点的主缓存中</li>
+</ol>
+<figure data-type="image" tabindex="3"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/20210629234058250.png" alt="在这里插入图片描述" loading="lazy"></figure>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[不会KMP也没关系,试试更简单更快的Sunday算法!]]></title>
+        <id>https://LyntNy4n.github.io/post/sunday/</id>
+        <link href="https://LyntNy4n.github.io/post/sunday/">
+        </link>
+        <updated>2023-05-08T07:35:22.000Z</updated>
+        <summary type="html"><![CDATA[<p>TLDR: Sunday算法是一种比KMP算法简单且更快的字符串匹配算法.尽管如此,由于种种原因,目前更通用的算法是BM算法</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>TLDR: Sunday算法是一种比KMP算法简单且更快的字符串匹配算法.尽管如此,由于种种原因,目前更通用的算法是BM算法</p>
+<!-- more -->
+<p>字符串匹配,是在一个字符串s中寻找与子串(也称模式串,pattern,简称p)首次匹配的索引位置.解决这个问题最简单的方法肯定是暴力搜索,套2个for循环去遍历.然而这样做的时间复杂度是O(m*n),m是s的长度,n是p的长度.如果想要更高效的做法,很多书/网站会介绍<strong>KMP</strong>算法,它的复杂度是O(m+n).然而KMP算法的做法比较复杂,特别是那个next数组,我也整不明白(.然后我偶然看到了一个叫<strong>Sunday</strong>的算法,它也是用来做字符串匹配的,但是实现简单得多,而且它居然比KMP还快,平均时间复杂度降低到了O(m/n).所以不会KMP也没关系,学个Sunday也不错(</p>
+<h2 id="sunday算法">Sunday算法</h2>
+<p>Sunday算法比KMP,BM算法出现的晚(1990年),它是对BM算法的进一步小幅优化</p>
+<h3 id="流程演示">流程演示</h3>
+<p>先不讲实现,我们先看看Sunday算法是怎么做的:</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101339_63895f5324e0726240.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_后缀_16" loading="lazy"></figure>
+<p>首先原字符串和子串左端对齐，发现“T”与“E”不匹配之后，检测<strong>原字符串中下一个字符</strong>（在这个例子中是“THIS IS”后面的那个空格,索引为7）是否在子串中出现，如果出现移动子串将两者对齐，如果没有出现则直接将子串移动到下一个位置。这里空格没有在子串中出现，移动子串到空格的下一个位置“A”：</p>
+<figure data-type="image" tabindex="2"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101339_63895f534a2c231417.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_字符串_17" loading="lazy"></figure>
+<p>发现“A”与“E”不匹配，但是原字符串中下一个字符“E”(索引15)在子串中出现了，第一个字符和最后一个字符都有出现，那么移动子串<strong>靠后</strong>的字符与原字符串对齐：</p>
+<figure data-type="image" tabindex="3"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101339_63895f536834190591.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_子串_18" loading="lazy"></figure>
+<p>然后发现空格和“E”不匹配，原字符串中下一个字符“空格”也没有在子串中出现，所以直接移动子串到空格(索引16)的下一个字符“E”(索引17)：</p>
+<figure data-type="image" tabindex="4"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101339_63895f537f20078398.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_后缀_19" loading="lazy"></figure>
+<p>这样从头开始逐个匹配，匹配成功!</p>
+<h3 id="算法解释">算法解释</h3>
+<p>Sunday算法是从前往后匹配,如果匹配失败,关注的是主串中<strong>参加匹配的最末位字符的下一位字符</strong>,对此有两种情况:</p>
+<ul>
+<li>如果该字符没有在模式串中出现则直接跳过，即移动位数 = 模式串长度 + 1(即全部不匹配,整个挪走)</li>
+<li>否则，其移动位数 = <strong>模式串中该字符最右出现的位置到尾部的距离 + 1</strong> = 模式串长度 - 该字符最右出现的位置(以0开始)</li>
+</ul>
+<p>对于第二种情况的移动位数,我们可以预先用哈希表计算并存起来,代码也很简单</p>
+<pre><code class="language-python">def calc_shift_dict(pattern:str) -&gt; dict[str, int]:
+    shift_dict={}
+    for i, c in enumerate(pattern):
+        shift_dict[c] = len(pattern) - i
+    return shift_dict
+# 以 'EXAMPLE' 为例
+# shift_dict = {'E': 1, 'X': 6, 'A': 5, 'M': 4, 'P': 3, 'L': 2}
+# 循环中,最后一个E会更新第一个E的值,以达到最右出现的位置的效果
+</code></pre>
+<p>有了这个偏移表,后续逻辑写起来就很容易了,比KMP简单的不是一点半点:</p>
+<pre><code class="language-python">def sunday(s: str, p: str) -&gt; int:
+    n, m = len(s), len(p)
+    shift_dict = calc_shift_dict(p)          	# 生成偏移表 
+    i = 0
+    while i + m &lt;= n:                           # 以免 s[i: i + m] 超出范围
+        if s[i: i + m] == p:
+            return i                            # 匹配完成,返回模式串 p 在文本串 s 的位置
+        if i + m == n:                          # 边界情况: 匹配到 s 末尾了,不能再取末尾的下一个索引了 
+            return -1
+        i += shift_dict.get(s[i + m], m + 1)    # 通过偏移表,向右进行进行快速移动
+    return -1                                   # 匹配失败
+</code></pre>
+<p>这里最脑梗的就是第8行的if,你也许会想,我直接while改成<code>while i + m &lt; n</code>,然后不就可以去掉<code>if i + m == n</code>这个判断了?</p>
+<p>然而不行,因为while是来判断取s的切片有没有超出s的长度,而if是来判断模式串末尾是不是移动到了s的末尾</p>
+<p>举一个例子: s和t都是<code>'abc'</code>,那么一开始<code>i + m = 0 + 3 = 3</code>跟n是一样的,这会导致进不去while而返回-1,然而真实结果应该是0,所以while不能修改</p>
+<p>那if能不能单去掉?也不能,考虑<code>s='abc' t='abd'</code>,一开始可以进入while,然后第一个if不行,如果没有第二个if,那就到了<code>shift_dict.get(s[i + m], m + 1)</code>这里,由于s最大索引是2,但是<code>i + m</code>是3,这样就会超出索引报错.第二个if就是为了兜住这个边界情况而存在的</p>
+<h3 id="优缺点">优缺点</h3>
+<p>Sunday算法的优点:</p>
+<ol>
+<li>匹配逻辑简单,比较符合直觉;写起来也简单,只需要注意最后匹配到末尾的边界情况就行了</li>
+<li>预处理时间较短,大部分情况也比KMP快,平均时间复杂度是O(n/m)</li>
+</ol>
+<p>很可惜,这么简洁的算法却没有BM算法流行,因为它也有软肋:</p>
+<ol>
+<li>Sunday算法的核心依赖于偏移表，而偏移表的值则取决于模式串，那么就可能存在模式串构造出很差的偏移表,比如<code>aaaaa</code>的表就是<code>{a:1}</code>,这导致每次匹配失败时，只让模式串向后移动一位再进行匹配。这样就让Sunday算法的时间复杂度飙升到了<code>O(m*n)</code>，也就是字符串匹配的最坏情况</li>
+</ol>
+<p>根据知乎该位用户所言,Sunday算法有比较高的可能达到最坏时间复杂度</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20230508151631101.png" alt="image-20230508151631101" style="zoom:67%;" />
+<p>那么不同的适用于哪里呢?我为此请教了ChatGPT(</p>
+<blockquote>
+<p>Q: BM算法和Sunday算法 实际中哪个更常用? 为什么?</p>
+<p>A: BM算法和Sunday算法都是常见的字符串匹配算法，但它们在实际中的使用情况会因为具体的应用场景而有所不同。</p>
+<p>BM算法是一种高效的字符串匹配算法，它的时间复杂度是O(n/m)，其中n和m分别是文本串和模式串的长度。BM算法在大部分情况下都比Sunday算法更快速，因此在需要高效匹配的场景中，如文本编辑器、搜索引擎等领域，BM算法被广泛使用。</p>
+<p>Sunday算法是一种比较简单的字符串匹配算法，它的时间复杂度也是O(n/m)，但是它的实现比BM算法要简单得多。Sunday算法主要适用于模式串比较短的情况，当模式串长度小于等于20时，Sunday算法的表现往往比BM算法更好，因为它的预处理时间较短，可以更快地生成偏移表</p>
+<p>因此，BM算法在大部分情况下更常用，特别是在需要高效匹配的场景中。但在模式串较短的情况下，Sunday算法可以提供更快的匹配速度</p>
+<p>Q: 那KMP算法呢?</p>
+<p>A: KMP算法也是一种常见的字符串匹配算法，它的时间复杂度也是O(n+m)。</p>
+<p>与BM算法和Sunday算法不同的是，KMP算法使用一个next数组来预处理模式串，从而实现快速匹配。具体来说，KMP算法预处理出模式串的next数组后，在匹配过程中，利用next数组中存储的信息来跳过一些不必要的比较，从而提高匹配效率。</p>
+<p>KMP算法适用于文本串和模式串长度相近或者模式串长度较短的情况下，它在一些场景下比BM算法和Sunday算法更适合。例如在字符串匹配长度较短的情况下，KMP算法的预处理时间相对较短，因此在这种情况下，KMP算法可以比BM算法更快地进行匹配。</p>
+<p>综上所述，KMP算法也是一种常见的字符串匹配算法，在某些情况下可以比BM算法和Sunday算法更适合。但在需要高效匹配的场景中，BM算法的效率往往更高一些。</p>
+</blockquote>
+<p>所以实际中是BM算法用得更多,事实上,各种记事本的“查找”功能（CTRL + F）一般都是采用BM算法</p>
+<h2 id="其他字符串匹配算法简介">其他字符串匹配算法简介</h2>
+<h3 id="暴力算法">暴力算法</h3>
+<p>暴力检索法是最好想到的算法，也最好实现，在情况简单的情况下可以直接使用：</p>
+<figure data-type="image" tabindex="5"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101337_63895f519d92610454.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_字符串" loading="lazy"></figure>
+<p>首先将原字符串和子串左端对齐，逐一比较；如果第一个字符不能匹配，则子串向后移动一位继续比较；如果第一个字符匹配，则继续比较后续字符，直至全部匹配。</p>
+<p>时间复杂度: O(m*n)</p>
+<h3 id="rk算法">RK算法</h3>
+<p>RK算法是对BF算法的一个改进：在BF算法中，每一个字符都需要进行比较，并且当我们发现首字符匹配时仍然需要比较剩余的所有字符。而在RK算法中，就尝试只进行一次比较来判定两者是否相等。</p>
+<p>RK算法也可以进行多模式匹配，在论文查重等实际应用中一般都是使用此算法。</p>
+<figure data-type="image" tabindex="6"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/02101337_63895f51b36264440.png" alt="收藏整理：KMP,BM,SUNDAY算法综合_子串_02" loading="lazy"></figure>
+<p>首先计算子串的HASH值，之后分别取原字符串中子串长度的字符串计算HASH值，比较两者是否相等：如果HASH值不同，则两者必定不匹配，如果相同，由于哈希冲突存在，也需要按照BF算法再次判定。</p>
+<p>按照此例子，首先计算子串“DEF”HASH值为Hd，之后从原字符串中依次取长度为3的字符串“ABC”、“BCD”、“CDE”、“DEF”计算HASH值，分别为Ha、Hb、Hc、Hd，当Hd相等时，仍然要比较一次子串“DEF”和原字符串“DEF”是否一致。</p>
+<p>时间复杂度: O(m*n)实际应用中往往较快，期望时间为O(m+n)</p>
+<h3 id="kmp算法">KMP算法</h3>
+<p><strong>Knuth Morris Pratt 算法</strong>，是由它的三位发明者 Donald Knuth、James H. Morris、 Vaughan Pratt 的名字来命名的。KMP 算法是他们三人在 1977 年联合发表的。</p>
+<p>字符串匹配最经典算法之一，各大教科书上的看家绝学，曾被投票选为当今世界最伟大的十大算法之一；但是晦涩难懂，并且十分难以实现</p>
+<p>对于给定文本串 <code>T</code> 与模式串 <code>p</code>，当发现文本串 <code>T</code> 的某个字符与模式串 <code>p</code> 不匹配的时候，可以利用匹配失败后的信息，尽量减少模式串与文本串的匹配次数，避免文本串位置的回退，以达到快速匹配的目的。</p>
+<p>时间复杂度: 稳定的O(m+n)</p>
+<h3 id="bm算法">BM算法</h3>
+<p><strong>Boyer Moore 算法</strong> 是由它的两位发明者 Robert S. Boyer 和 J Strother Moore 的名字来命名的。BM 算法是他们在 1977 年提出的高效字符串搜索算法。在实际应用中，比 KMP 算法要快 3~5 倍</p>
+<p>对于给定文本串 <code>T</code> 与模式串 <code>p</code>，先对模式串 <code>p</code> 进行预处理。然后在匹配的过程中，当发现文本串 <code>T</code> 的某个字符与模式串 <code>p</code> 不匹配的时候，根据启发策略，能够直接尽可能地跳过一些无法匹配的情况，将模式串多向后滑动几位</p>
+<p>BM 算法的精髓在于使用了两种不同的启发策略来计算后移位数：<strong>「坏字符规则（The Bad Character Rule）」</strong> 和 <strong>「好后缀规则（The Good Suffix Shift Rule）」</strong></p>
+<p>这两种启发策略的计算过程只与模式串 <code>p</code> 相关，而与文本串 <code>T</code> 无关。因此在对模式串 <code>p</code> 进行预处理时，可以预先生成「坏字符规则后移表」和「好后缀规则后移表」，然后在匹配的过程中，只需要比较一下两种策略下最大的后移位数进行后移即可。</p>
+<p>同时，还需要注意一点。BM 算法在移动模式串的时候和常规匹配算法一样是从左到右进行，但是在进行比较的时候是从右到左，即基于后缀进行比较。</p>
+<p>时间复杂度: O(m/n) 最坏也是O(m*n),但是几率比Sunday小,而且可以改良成稳定的</p>
+<h2 id="参考文献">参考文献</h2>
+<p><a href="https://blog.51cto.com/u_14230175/5905645">收藏整理：KMP,BM,SUNDAY算法综合</a></p>
+<p><a href="https://www.jianshu.com/p/2e6eb7386cd3">字符串匹配算法之Sunday算法</a></p>
+<p><a href="https://algo.itcharge.cn/06.String/02.String-Single-Pattern-Matching/06.String-Sunday/">算法通关手册:Sunday 算法</a></p>
+<p><a href="https://zhuanlan.zhihu.com/p/142895983">动画演示Sunday字符串匹配算法——比KMP算法快七倍！极易理解！</a></p>
+<p><a href="https://blog.csdn.net/cy_cai/article/details/53130374">Simple、KMP、BM、Sunday匹配算法-效率测试</a></p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[PNGme:基于Rust的命令行程序 在PNG图片中隐藏信息]]></title>
+        <id>https://LyntNy4n.github.io/post/pngme/</id>
+        <link href="https://LyntNy4n.github.io/post/pngme/">
+        </link>
+        <updated>2023-05-01T12:47:43.000Z</updated>
+        <summary type="html"><![CDATA[<p>本文基于 https://picklenerd.github.io/pngme_book/introduction.html 精简了一下并附带了自己的理解</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>本文基于 https://picklenerd.github.io/pngme_book/introduction.html 精简了一下并附带了自己的理解</p>
+<!-- more -->
+<p>我们要制作一个命令行程序<strong>PNGme</strong>，可以在 PNG 文件中隐藏秘密消息</p>
+<p>完整代码可见 https://github.com/LyntNy4n/pngme</p>
+<h2 id="需要做什么">需要做什么?</h2>
+<p>程序将有四个命令:</p>
+<ol>
+<li>Encode a message into a PNG file<br>
+将消息编码为 PNG 文件</li>
+<li>Decode a message stored in a PNG file<br>
+解码存储在 PNG 文件中的消息</li>
+<li>Remove a message from a PNG file<br>
+从 PNG 文件中删除消息</li>
+<li>Print a list of PNG chunks that can be searched for messages<br>
+打印可搜索消息的 PNG 块列表</li>
+</ol>
+<h2 id="初始配置">初始配置</h2>
+<p>使用 <code>cargo new --bin pngme</code> 创建一个新的二进制项目,将将以下代码复制到 <code>main.rs</code> 文件中</p>
+<pre><code class="language-rust">mod args;
+mod chunk;
+mod chunk_type;
+mod commands;
+mod png;
+
+pub type Error = Box&lt;dyn std::error::Error&gt;;
+pub type Result&lt;T&gt; = std::result::Result&lt;T, Error&gt;;
+
+fn main() -&gt; Result&lt;()&gt; {
+    todo!()
+}
+</code></pre>
+<p>接下来我们就要完成各个模块,先把各模块的rs文件在src目录中创建好,以免报错</p>
+<p>在上面代码中提供了 <code>Error</code> 和 <code>Result</code> 类型别名，它们可以让你在代码中轻松使用 <code>?</code> 运算符,也可以用第三方库<code>anyhow</code>做到同样的</p>
+<p><a href="http://www.libpng.org/pub/png/spec/1.2/PNG-Structure.html">PNG 文件结构规范</a> 需要去看一下,下面也会有讲到</p>
+<p>PS. 原文还提供了每个模块的测试用例,但是太长了,这里就不列出来了.可以去原文章去看,或者github上的完整代码里也有</p>
+<h2 id="chunk-types-块类型">Chunk Types 块类型</h2>
+<p>PNG 文件本质上只是一个“块”列表，每个块都包含自己的数据。每个块都有一个可以表示为 4 个字符的字符串的类型。像图像数据这样的东西有标准的块类型，但是没有规则会阻止你插入你自己的块和你想要的任何数据。我们甚至可以告诉 PNG 解码器忽略我们的块</p>
+<h3 id="chunk-type的通俗解释">Chunk Type的通俗解释</h3>
+<p>一个块类型就是4个以字节表示的ASCII码英文字母,比如<code>BLOB</code>,<code>RUST</code>,<code>Wuhu</code></p>
+<p>不过还是有一些规则的,这些规则代表了不同的含义:</p>
+<p>每个字节的第5位（从0开始,对应二进制值的32）用于传达块属性。者意味着人们可以根据类型代码的每个字母是大写（第 5 位为 0）还是小写（第 5 位为 1）来读取分配的属性,<strong>不同字节的第5位有不同的含义</strong></p>
+<ol>
+<li><strong>辅助位：第一个字节的第 5 位</strong></li>
+</ol>
+<p>​	0 (uppercase) = critical, 1 (lowercase) = ancillary<br>
+​	0（大写）= 关键，1（小写）= 辅助</p>
+<p>​	遇到辅助位为 1 的未知块的解码器可以安全地忽略该块并继续显示图像,比如时间块 (tIME)</p>
+<ol start="2">
+<li><strong>私有位：第二个字节的第 5 位</strong></li>
+</ol>
+<p>​	0 (uppercase) = public, 1 (lowercase) = private<br>
+​	0（大写）= 公共，1（小写）= 私有</p>
+<p>​	公共块是 PNG 规范的一部分或在 PNG 专用公共块类型列表中注册的块。应用程序还可以为自己的目的定义私有（未注册）块</p>
+<ol start="3">
+<li><strong>保留(Reserved)位：第三个字节的第5位</strong></li>
+</ol>
+<p>​	第三个字母大小写的意义是为将来可能的扩展保留的。目前所有的块名都必须有大写(0)的第三个字母</p>
+<ol start="4">
+<li><strong>安全复制位: 第四个字节的第5位</strong></li>
+</ol>
+<p>​	0 (uppercase) = unsafe to copy, 1 (lowercase) = safe to copy</p>
+<p>​	0（大写）= 复制不安全，1（小写）= 复制安全</p>
+<p>​	如果块的安全复制位为 1，则无论软件是否识别块类型，也不管文件修改的范围如何，都可以将块复制到修改后的 PNG 文件</p>
+<p>​	如果块的安全复制位为 0，则表示该块依赖于图像数据。如果程序对关键块进行了任何更改，包括关键块的添加、修改、删除或重新排序，则不得将无法识别的不安全块复制到输出 PNG 文件中</p>
+<h3 id="实现块类型">实现块类型</h3>
+<p>在<code>chunk_type.rs</code>中开写</p>
+<p>我们要在Rust中复刻PNG的块类型,需要提供以字节为单位返回块类型的方法，检查整个块类型的有效性，并检查四个字节中每个字节的大写特殊含义。下面提供了方法签名</p>
+<pre><code class="language-rust">fn bytes(&amp;self) -&gt; [u8; 4]
+fn is_valid(&amp;self) -&gt; bool
+fn is_critical(&amp;self) -&gt; bool
+fn is_public(&amp;self) -&gt; bool
+fn is_reserved_bit_valid(&amp;self) -&gt; bool
+fn is_safe_to_copy(&amp;self) -&gt; bool
+// 还要实现 TryFrom&lt;[u8; 4]&gt;, FromStr, Display, PartialEq 和 Eq
+</code></pre>
+<p>也许最简单的<code>ChunkType</code>就是这样:</p>
+<pre><code class="language-rust">pub struct ChunkType {
+    bytes: [u8; 4],
+}
+//或者这样也可以
+pub struct ChunkType {
+    first_byte: u8,
+    second_byte: u8,
+    third_byte: u8,
+    fourth_byte: u8,
+}
+</code></pre>
+<p>在这里,我们玩花的,使用第二种表示,因为每个字节都有不同的含义,分开表示也不错</p>
+<p>然后下面就是各种方法的实现了:</p>
+<pre><code class="language-rust">impl ChunkType {
+    pub fn bytes(&amp;self) -&gt; [u8; 4] {
+        [
+            self.first_byte,
+            self.second_byte,
+            self.third_byte,
+            self.fourth_byte,
+        ]
+    }
+    pub fn is_critical(&amp;self) -&gt; bool {
+        self.first_byte &amp; 0b0010_0000 == 0
+    }
+    pub fn is_public(&amp;self) -&gt; bool {
+        self.second_byte &amp; 0b0010_0000 == 0
+    }
+    pub fn is_reserved_bit_valid(&amp;self) -&gt; bool {
+        self.third_byte &amp; 0b0010_0000 == 0
+    }
+    pub fn is_safe_to_copy(&amp;self) -&gt; bool {
+        self.fourth_byte &amp; 0b0010_0000 != 0
+    }
+    pub fn is_valid(&amp;self) -&gt; bool {
+        self.is_reserved_bit_valid()
+    }
+}
+
+fn is_all_alphabetic(bytes: [u8; 4]) -&gt; bool {
+    bytes.iter().all(|byte| byte.is_ascii_alphabetic())
+}
+</code></pre>
+<p>也可以用<code>is_ascii_uppercase()</code>,但按位与应该更快一点,不过这样我们就要保证这4个字节都是ASCII字母了</p>
+<p>多写了<code>is_all_alphabetic</code>,用于后续验证</p>
+<p><code>PartialEq, Eq</code>我们derive就可以了,接下来我们实现<code>TryFrom</code></p>
+<pre><code class="language-rust">impl TryFrom&lt;[u8; 4]&gt; for ChunkType {
+    type Error = &amp;'static str;
+
+    fn try_from(bytes: [u8; 4]) -&gt; std::result::Result&lt;Self, Self::Error&gt; {
+        if !is_all_alphabetic(bytes) {
+            return Err(&quot;ChunkType must be alphabetic&quot;);
+        }
+        let chunk_type = ChunkType {
+            first_byte: bytes[0],
+            second_byte: bytes[1],
+            third_byte: bytes[2],
+            fourth_byte: bytes[3],
+        };
+        Ok(chunk_type)
+    }
+}
+</code></pre>
+<p>朴实无华,注意这里不用检查第三位是不是小写</p>
+<p>然后是<code>FromStr</code></p>
+<pre><code class="language-rust">impl FromStr for ChunkType {
+    type Err = &amp;'static str;
+
+    fn from_str(s: &amp;str) -&gt; Result&lt;Self, Self::Err&gt; {
+        if s.len() != 4 {
+            return Err(&quot;ChunkType string must be 4 characters long&quot;);
+        }
+        let mut bytes = [0; 4];
+        for (i, byte) in s.bytes().enumerate() {
+            bytes[i] = byte;
+        }
+        ChunkType::try_from(bytes)
+    }
+}
+</code></pre>
+<p>用<code>tryfrom</code>,爽死辣(</p>
+<p><code>Display</code>显示字母就好了</p>
+<pre><code class="language-rust">impl Display for ChunkType {
+    fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        let bytes = self.bytes();
+        for byte in bytes.iter() {
+            write!(f, &quot;{}&quot;, *byte as char)?;
+        }
+        Ok(())
+    }
+}
+</code></pre>
+<h2 id="chunk-块">Chunk 块</h2>
+<p>我们已经有了 <code>ChunkType</code> 结构，我们可以实现其余的块了。再次查看 PNG 文件结构规范。 <code>3.2</code> 部分包含需要的所有信息</p>
+<h3 id="块布局">块布局</h3>
+<p>每个块由四个部分组成：</p>
+<p><strong>Length</strong>: 一个 <strong>4 字节无符号整数</strong>，表示块数据字段中的字节数。<strong>长度仅计算数据字段</strong>，而不计算其本身、块类型代码或 CRC。零是有效长度。尽管编码器和解码器应将长度视为无符号，但其值不得超过 2<sup>31</sup> 字节</p>
+<p><strong>Chunk Type</strong>: 一个 <strong>4 字节的块类型代码</strong>。为了便于描述和检查 PNG 文件，类型代码仅限于由大写和小写 ASCII 字母（A-Z 和 a-z，或 65-90 和 97-122）组成。但是，编码器和解码器必须将代码视为固定的二进制值，而不是字符串(<strong>也就是要看作一个一个字节</strong>)</p>
+<p><strong>Chunk Data</strong>: 适合块类型的数据字节。该字段可以是零长度</p>
+<p><strong>CRC</strong>: 一个4字节的CRC（Cyclic Redundancy Check）是根据chunk前面的字节计算出来的，包括chunk type和chunk data字段，但不包括length字段。 CRC 始终存在，即使对于不包含数据的块也是如此</p>
+<h4 id="关于计算-crc">关于计算 CRC</h4>
+<p>不头铁,选择第三方库,toml里加入<code>crc = &quot;3.0.1&quot;</code> https://crates.io/crates/crc</p>
+<p>我们要实现 PNG 块。这个块应包含上面列出的四段数据,还需要提供方法来返回这四个数据中的每一个，如果块数据是有效的 UTF-8（否则为错误），则块数据被解释为字符串，并且整个块作为字节序列</p>
+<p>在<code>chunk.rs</code>中开写</p>
+<pre><code class="language-rust">fn new(chunk_type: ChunkType, data: Vec&lt;u8&gt;) -&gt; Chunk
+fn length(&amp;self) -&gt; u32
+fn chunk_type(&amp;self) -&gt; &amp;ChunkType
+fn data(&amp;self) -&gt; &amp;[u8]
+fn crc(&amp;self) -&gt; u32
+fn data_as_string(&amp;self) -&gt; Result&lt;String&gt;
+fn as_bytes(&amp;self) -&gt; Vec&lt;u8&gt;
+//还要 TryFrom&lt;&amp;[u8]&gt;, Display
+</code></pre>
+<p><code>Chunk</code>也分四部分好了:</p>
+<pre><code class="language-rust">use crate::chunk_type::ChunkType;
+pub struct Chunk {
+    length: u32,
+    chunk_type: ChunkType,
+    data: Vec&lt;u8&gt;,
+    crc: u32,
+}
+</code></pre>
+<p>然后是实现,这里用了万能Result,不然错误类型麻烦</p>
+<p>crc的用法够清奇的,得翻文档才知道怎么用</p>
+<pre><code class="language-rust">use crate::Result;
+impl Chunk {
+    pub fn new(chunk_type: ChunkType, data: Vec&lt;u8&gt;) -&gt; Chunk {
+        let length = data.len() as u32;
+        let crc_content = chunk_type
+            .bytes()
+            .iter()
+            .chain(data.iter())
+            .copied()
+            .collect::&lt;Vec&lt;u8&gt;&gt;();
+        let crc = crc::Crc::&lt;u32&gt;::new(&amp;crc::CRC_32_ISO_HDLC).checksum(&amp;crc_content);
+        Chunk {
+            length,
+            chunk_type,
+            data,
+            crc,
+        }
+    }
+    pub fn length(&amp;self) -&gt; u32 {
+        self.length
+    }
+    pub fn chunk_type(&amp;self) -&gt; &amp;ChunkType {
+        &amp;self.chunk_type
+    }
+    pub fn data(&amp;self) -&gt; &amp;[u8] {
+        &amp;self.data
+    }
+    pub fn crc(&amp;self) -&gt; u32 {
+        self.crc
+    }
+    pub fn data_as_string(&amp;self) -&gt; Result&lt;String&gt; {
+        let string = String::from_utf8(self.data.clone())?;
+        Ok(string)
+    }
+    pub fn as_bytes(&amp;self) -&gt; Vec&lt;u8&gt; {
+        let mut bytes = Vec::new();
+        bytes.extend(&amp;self.length.to_be_bytes());
+        bytes.extend(&amp;self.chunk_type.bytes());
+        bytes.extend(&amp;self.data);
+        bytes.extend(&amp;self.crc.to_be_bytes());
+        bytes
+    }
+}
+</code></pre>
+<p>然后是<code>TryFrom&lt;&amp;[u8]&gt;, Display</code></p>
+<pre><code class="language-rust">impl TryFrom&lt;&amp;[u8]&gt; for Chunk {
+    type Error = &amp;'static str;
+
+    fn try_from(bytes: &amp;[u8]) -&gt; std::result::Result&lt;Self, Self::Error&gt; {
+        if bytes.len() &lt; 12 {
+            return Err(&quot;Chunk data is too short&quot;);
+        }
+        let chunk_type_bytes: [u8; 4] = bytes[4..8].try_into().unwrap();
+        let chunk_type = ChunkType::try_from(chunk_type_bytes)?;
+        let data = bytes[8..bytes.len() - 4].to_vec();
+        let crc_bytes: [u8; 4] = bytes[bytes.len() - 4..].try_into().unwrap();
+        let crc = u32::from_be_bytes(crc_bytes);
+        let chunk = Chunk::new(chunk_type, data);
+        if chunk.crc != crc {
+            return Err(&quot;CRC does not match&quot;);
+        }
+        Ok(chunk)
+    }
+}
+
+impl Display for Chunk {
+    fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        let chunk_string = self
+            .data_as_string()
+            .unwrap_or_else(|_| String::from(&quot;Invalid UTF-8&quot;));
+        write!(
+            f,
+            &quot;Chunk\n\tLength: {}\n\tType: {}\n\tData: {}\n\tCRC: {}&quot;,
+            self.length, self.chunk_type, chunk_string, self.crc
+        )
+    }
+}
+</code></pre>
+<p><code>chunk_type_bytes</code>要显式声明成<code>[u8;4]</code>才能转</p>
+<p><code>from_be_bytes</code>将<code>[u8;4]</code>按照大端字节序转成<code>u32</code></p>
+<h2 id="png文件">PNG文件</h2>
+<p>终于到了实现完整PNG文件的时候了,我们还要再看一下PNG文件规范</p>
+<h4 id="png文件结构">PNG文件结构</h4>
+<p>一个 PNG 文件由一个 <strong>PNG 签名</strong>和后面的<strong>一系列块</strong>组成</p>
+<p>PNG 签名:即文件的前八个字节始终包含以下（十进制）值：</p>
+<pre><code>137 80 78 71 13 10 26 10
+</code></pre>
+<p>此签名表明文件的其余部分包含单个 PNG 图像，由一系列以 IHDR 块开始并以 IEND 块结束的块组成</p>
+<p>所谓后面的一系列块,就是我们上一节的<code>Chunk</code></p>
+<p>我们需要提供一个构造函数，该构造函数采用块列表、附加和删除块的方法以及返回标头的方法、所有块的一部分以及整个 PNG 文件作为 <code>Vec&lt;u8&gt;</code> 字节</p>
+<p>还要求再<code>impl</code> 块中，添加一个名为 <code>STANDARD_HEADER</code> 的公共常量，它具有8 个标准标头字节</p>
+<p>在<code>png.rs</code>中开写</p>
+<pre><code class="language-rust">fn from_chunks(chunks: Vec&lt;Chunk&gt;) -&gt; Png
+fn append_chunk(&amp;mut self, chunk: Chunk)
+fn remove_chunk(&amp;mut self, chunk_type: &amp;str) -&gt; Result&lt;Chunk&gt;
+fn header(&amp;self) -&gt; &amp;[u8; 8]
+fn chunks(&amp;self) -&gt; &amp;[Chunk]
+fn chunk_by_type(&amp;self, chunk_type: &amp;str) -&gt; Option&lt;&amp;Chunk&gt;
+fn as_bytes(&amp;self) -&gt; Vec&lt;u8&gt;
+//还有 TryFrom&lt;&amp;[u8]&gt;, Display
+</code></pre>
+<p><code>Png</code>结构很容易写出来:</p>
+<pre><code class="language-rust">use crate::chunk::Chunk;
+use crate::Result; // 后面要用到
+pub struct Png {
+    header: [u8; 8],
+    chunks: Vec&lt;Chunk&gt;,
+}
+</code></pre>
+<p>然后是实现:</p>
+<pre><code class="language-rust">impl Png {
+    const STANDARD_HEADER: [u8; 8] = [137, 80, 78, 71, 13, 10, 26, 10];
+    pub fn from_chunks(chunks: Vec&lt;Chunk&gt;) -&gt; Png {
+        Png {
+            header: Png::STANDARD_HEADER,
+            chunks,
+        }
+    }
+    pub fn append_chunk(&amp;mut self, chunk: Chunk) {
+        self.chunks.push(chunk);
+    }
+    pub fn remove_chunk(&amp;mut self, chunk_type: &amp;str) -&gt; Result&lt;Chunk&gt; {
+        let index = self
+            .chunks
+            .iter()
+            .position(|chunk| format!(&quot;{}&quot;, chunk.chunk_type()) == chunk_type)
+            .ok_or(&quot;Chunk not found&quot;)?;
+        Ok(self.chunks.remove(index))
+    }
+    pub fn header(&amp;self) -&gt; &amp;[u8; 8] {
+        &amp;self.header
+    }
+    pub fn chunks(&amp;self) -&gt; &amp;[Chunk] {
+        &amp;self.chunks
+    }
+    pub fn chunk_by_type(&amp;self, chunk_type: &amp;str) -&gt; Option&lt;&amp;Chunk&gt; {
+        self.chunks
+            .iter()
+            .find(|chunk| format!(&quot;{}&quot;, chunk.chunk_type()) == chunk_type)
+    }
+    pub fn as_bytes(&amp;self) -&gt; Vec&lt;u8&gt; {
+        let mut bytes = Vec::new();
+        bytes.extend(&amp;self.header);
+        bytes.extend(
+            self.chunks
+                .iter()
+                .flat_map(|chunk| chunk.as_bytes())
+                .collect::&lt;Vec&lt;u8&gt;&gt;(),
+        );
+        bytes
+    }
+}
+</code></pre>
+<p>可以看到<code>remove_chunk</code>中,我们没有实现<code>Chunk</code>转<code>String/str</code>的方法,但是实现了<code>Display</code>,而Display所做的就是显示字节对应的英文字母,所以直接用<code>format!</code>就可以了</p>
+<p>然后是<code>TryFrom, Display</code></p>
+<pre><code class="language-rust">impl TryFrom&lt;&amp;[u8]&gt; for Png {
+    type Error = &amp;'static str;
+
+    fn try_from(bytes: &amp;[u8]) -&gt; std::result::Result&lt;Self, Self::Error&gt; {
+        if bytes.len() &lt; 8 {
+            return Err(&quot;PNG data is too short&quot;);
+        }
+        let header: [u8; 8] = bytes[0..8].try_into().unwrap();
+        if header != Png::STANDARD_HEADER {
+            return Err(&quot;PNG header is invalid&quot;);
+        }
+        let mut chunks = Vec::new();
+        let mut index = 8;
+        while index &lt; bytes.len() {
+            let length_bytes: [u8; 4] = bytes[index..index + 4].try_into().unwrap();
+            let length = u32::from_be_bytes(length_bytes) as usize;
+            let chunk_end = index + 4 + 4 + length + 4; // index + length + type + data + crc
+            if chunk_end &gt; bytes.len() {
+                return Err(&quot;PNG chunk is too long&quot;);
+            }
+            let chunk_bytes = &amp;bytes[index..chunk_end];
+            let chunk = Chunk::try_from(chunk_bytes)?;
+            chunks.push(chunk);
+            index = chunk_end;
+        }
+        Ok(Png { header, chunks })
+    }
+}
+
+impl Display for Png {
+    fn fmt(&amp;self, f: &amp;mut std::fmt::Formatter&lt;'_&gt;) -&gt; std::fmt::Result {
+        writeln!(f, &quot;PNG:&quot;)?;
+        for chunk in &amp;self.chunks {
+            writeln!(f, &quot;{}&quot;, chunk)?;
+        }
+        Ok(())
+    }
+}
+</code></pre>
+<h2 id="实现cli">实现CLI</h2>
+<p>最麻烦的部分以及完成了,现在要做的只是解析用户请求了,也就是设置命令行参数。设置参数将使处理该项目的最后一部分变得非常容易</p>
+<p>可以手动解析命令行参数,但用第三方crate是最方便的,<code>clap</code>是不二之选,toml添加<code>clap = { version = &quot;4.2.5&quot;, features = [&quot;derive&quot;] }</code> (原文用的是3.0.1,我这里改用最新的,且需要derive特性)</p>
+<p>我们需要做到能够使用类似于以下的命令运行程序</p>
+<pre><code class="language-bash">pngme encode ./dice.png ruSt &quot;This is a secret message!&quot;
+pngme decode ./dice.png ruSt
+pngme remove ./dice.png ruSt
+pngme print ./dice.png
+</code></pre>
+<p>应该有四个子命令，每个子命令都有自己的一组参数</p>
+<p><strong>Encode</strong> 在特定块中藏信息 需要4个参数</p>
+<ol>
+<li>文件路径</li>
+<li>块类型</li>
+<li>想藏的信息</li>
+<li>输出路径（可选,不写就是覆盖原文件）</li>
+</ol>
+<p><strong>Decode</strong> 从特定块中解密</p>
+<ol>
+<li>文件路径</li>
+<li>块类型</li>
+</ol>
+<p><strong>Remove</strong> 删掉一个块中藏的信息</p>
+<ol>
+<li>文件路径</li>
+<li>块类型</li>
+</ol>
+<p><strong>Print</strong> 打印所有能藏信息的块类型</p>
+<ol>
+<li>文件路径</li>
+</ol>
+<p>在纠结<code>clap</code>的用法之前,我们得先定义这些命令在Rust的表示,用<code>enum</code>就很不错:</p>
+<pre><code class="language-rust">use std::path::PathBuf;
+
+pub enum PngMeArgs {
+    Encode(EncodeArgs),
+    Decode(DecodeArgs),
+    Remove(RemoveArgs),
+    Print(PrintArgs),
+}
+
+pub struct EncodeArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+    message: String,
+    output: Option&lt;PathBuf&gt;,
+}
+
+pub struct DecodeArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+}
+
+pub struct RemoveArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+}
+
+pub struct PrintArgs {
+    file_path: PathBuf,
+}
+</code></pre>
+<p><code>PathBuf</code>是表示文件路径的结构,chatGPT给出了一些解释:</p>
+<blockquote>
+<p><code>PathBuf</code>和<code>Path</code>是Rust标准库中用于处理文件路径的两个类型。它们的主要区别在于可变性和所有权。</p>
+<p><code>Path</code>类型代表一个不可变的文件路径，而<code>PathBuf</code>类型代表一个可变的文件路径。<code>Path</code>类型的方法返回的是引用类型，不允许修改路径；而<code>PathBuf</code>类型的方法返回的是可变引用类型，允许修改路径。这意味着如果你需要修改一个文件路径，你需要使用<code>PathBuf</code>类型。</p>
+</blockquote>
+<p>clap虽然强大,但是比较复杂,想要整明白还不容易.不过我们这里的需求算是简单,所以还能应付,要是再复杂点可能得借助gpt4了(</p>
+<p>clap一般有2种使用方法: <code>build</code>和<code>derive</code>. build比较易懂,但是写起来比较繁琐;derive比较简洁,但是比较难懂</p>
+<p>我们这里使用了derive方法,现在<code>arg.rs</code>的内容如下,你可以看到clap的强大之处:</p>
+<pre><code class="language-rust">use clap::{Args, Parser, Subcommand};
+use std::path::PathBuf;
+
+#[derive(Debug, Parser)]
+#[clap(name = &quot;pngme&quot;)]
+pub struct Cli {
+    #[clap(subcommand)]
+    pub subcommand: PngMeArgs,
+}
+
+#[derive(Debug, Subcommand)]
+pub enum PngMeArgs {
+    //这个enum的变体就会解析成子命令(不分大小写)
+    //因为这个enum有Encode/Decode/Remove/Print 4个变体
+    //所以命令行中就可以输入如 pngme encode ... 这些子命令了
+    Encode(EncodeArgs),
+    Decode(DecodeArgs),
+    Remove(RemoveArgs),
+    Print(PrintArgs),
+}
+
+#[derive(Debug, Args)]
+pub struct EncodeArgs {
+    //通过derive Args 子命令下的参数就会按照这个结构来解析
+    file_path: PathBuf,
+    chunk_type: String,
+    message: String,
+    output: Option&lt;PathBuf&gt;,
+}
+
+#[derive(Debug, Args)]
+pub struct DecodeArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+}
+
+#[derive(Debug, Args)]
+pub struct RemoveArgs {
+    file_path: PathBuf,
+    chunk_type: String,
+}
+
+#[derive(Debug, Args)]
+pub struct PrintArgs {
+    file_path: PathBuf,
+}
+</code></pre>
+<p>泰裤辣!(</p>
+<p>然后<code>main.rs</code>改成这样:</p>
+<pre><code class="language-rust">use clap::Parser;
+mod args;
+mod chunk;
+mod chunk_type;
+mod commands;
+mod png;
+
+pub type Error = Box&lt;dyn std::error::Error&gt;;
+pub type Result&lt;T&gt; = std::result::Result&lt;T, Error&gt;;
+
+fn main() -&gt; Result&lt;()&gt; {
+    let args = args::Cli::parse();
+    println!(&quot;{:?}&quot;, args);
+    match args.subcommand {
+        args::PngMeArgs::Encode(encode_args) =&gt; commands::encode(encode_args),
+        args::PngMeArgs::Decode(decode_args) =&gt; commands::decode(decode_args),
+        args::PngMeArgs::Remove(remove_args) =&gt; commands::remove(remove_args),
+        args::PngMeArgs::Print(print_args) =&gt; commands::print(print_args),
+    }
+}
+</code></pre>
+<p><code>commands</code>是我们等下要实现的方法,如果想看看解析的结果,可以先把match那段注释掉</p>
+<p>我们来看看疗效</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20230501194749064.png" alt="image-20230501194749064" loading="lazy"></figure>
+<p>最后 利用之前实现的方法来写<code>command.rs</code></p>
+<pre><code class="language-rust">use crate::args::*;
+use crate::chunk::Chunk;
+use crate::chunk_type::ChunkType;
+use crate::png::Png;
+use crate::Result;
+use std::fs;
+use std::str::FromStr;
+
+pub fn encode(args: EncodeArgs) -&gt; Result&lt;()&gt; {
+    // check if file exists
+    if !args.file_path.exists() {
+        return Err(&quot;File does not exist&quot;.into());
+    }
+    let bytes = fs::read(args.file_path.clone())?;
+    let mut png = Png::try_from(&amp;bytes[..])?;
+    let new_chunk = Chunk::new(
+        ChunkType::from_str(&amp;args.chunk_type)?,
+        args.message.as_bytes().to_vec(),
+    );
+    png.append_chunk(new_chunk);
+    // write to file
+    if let Some(output) = args.output {
+        fs::write(output, png.as_bytes())?;
+    } else {
+        fs::write(args.file_path, png.as_bytes())?;
+    }
+    Ok(())
+}
+
+pub fn decode(args: DecodeArgs) -&gt; Result&lt;()&gt; {
+    // check if file exists
+    if !args.file_path.exists() {
+        return Err(&quot;File does not exist&quot;.into());
+    }
+    let bytes = fs::read(args.file_path)?;
+    let png = Png::try_from(&amp;bytes[..])?;
+    // find chunk
+    let chunk = png
+        .chunks()
+        .iter()
+        .find(|chunk| chunk.chunk_type().to_string() == args.chunk_type)
+        .ok_or(&quot;Chunk not found&quot;)?;
+    // decode message
+    let message: String = chunk.data().iter().map(|x| *x as char).collect();
+    println!(&quot;{}&quot;, message);
+    Ok(())
+}
+
+pub fn remove(args: RemoveArgs) -&gt; Result&lt;()&gt; {
+    // check if file exists
+    if !args.file_path.exists() {
+        return Err(&quot;File does not exist&quot;.into());
+    }
+    let bytes = fs::read(args.file_path.clone())?;
+    let mut png = Png::try_from(&amp;bytes[..])?;
+    // remove the chunk
+    png.remove_chunk(&amp;args.chunk_type)?;
+    // write to file
+    fs::write(args.file_path, png.as_bytes())?;
+    Ok(())
+}
+
+pub fn print(args: PrintArgs) -&gt; Result&lt;()&gt; {
+    // check if file exists
+    if !args.file_path.exists() {
+        return Err(&quot;File does not exist&quot;.into());
+    }
+    let bytes = fs::read(args.file_path)?;
+    let png = Png::try_from(&amp;bytes[..])?;
+    // print chunks
+    for chunk in png.chunks() {
+        println!(&quot;{}&quot;, chunk);
+    }
+    Ok(())
+}
+</code></pre>
+<p>我还是加了个chunk_type的<code>to_string</code>方法,主要不想用<code>format!</code>了(</p>
+<h2 id="最终成品展示">最终成品展示</h2>
+<p>我们使用维基的骰子图片<code>dice.png</code>作为演示</p>
+<img src="https://upload.wikimedia.org/wikipedia/commons/4/4c/Dice.png" alt="img" style="zoom:50%;" />
+<p>下面是运行的print的输出:</p>
+<pre><code class="language-bash">PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe print .\dice.png
+Cli { subcommand: Print(PrintArgs { file_path: &quot;.\\dice.png&quot; }) }
+Chunk
+        Length: 13
+        Type: IHDR
+        Data: Invalid UTF-8
+        CRC: 1807389920
+Chunk
+        Length: 4
+        Type: gAMA
+        Data: Invalid UTF-8
+        CRC: 201089285
+Chunk
+        Length: 46
+        Type: tEXt
+        Data: SoftwareXV version 3.10a-jumboFix of 20050410
+        CRC: 1223306120
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 1808155945
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 977458620
+Chunk
+        Length: 4833
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 4100335391
+Chunk
+        Length: 7
+        Type: tIME
+        Data: Invalid UTF-8
+        CRC: 3731693981
+Chunk
+        Length: 0
+        Type: IEND
+        Data:
+        CRC: 2923585666
+</code></pre>
+<p>我们要encode,不能修改现有chunk的data,不然图片就没法显示了,所以encode是往Vec最后那里加的</p>
+<pre><code class="language-bash">PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe encode .\dice.png RuSt &quot;Secret message!&quot; output.png
+Cli { subcommand: Encode(EncodeArgs { file_path: &quot;.\\dice.png&quot;, chunk_type: &quot;RuSt&quot;, message: &quot;Secret message!&quot;, output: Some(&quot;output.png&quot;) }) }
+
+PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe print .\output.png
+Cli { subcommand: Print(PrintArgs { file_path: &quot;.\\output.png&quot; }) }
+Chunk
+        Length: 13
+        Type: IHDR
+        Data: Invalid UTF-8
+        CRC: 1807389920
+Chunk
+        Length: 4
+        Type: gAMA
+        Data: Invalid UTF-8
+        CRC: 201089285
+Chunk
+        Length: 46
+        Type: tEXt
+        Data: SoftwareXV version 3.10a-jumboFix of 20050410
+        CRC: 1223306120
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 1808155945
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 977458620
+Chunk
+        Length: 4833
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 4100335391
+Chunk
+        Length: 7
+        Type: tIME
+        Data: Invalid UTF-8
+        CRC: 3731693981
+Chunk
+        Length: 0
+        Type: IEND
+        Data:
+        CRC: 2923585666
+Chunk
+        Length: 15
+        Type: RuSt
+        Data: Secret message!
+        CRC: 1157177192
+        
+PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe decode .\output.png RuSt
+Cli { subcommand: Decode(DecodeArgs { file_path: &quot;.\\output.png&quot;, chunk_type: &quot;RuSt&quot; }) }
+Secret message!
+</code></pre>
+<p>可以看到encode和decode的效果</p>
+<p>最后来remove我们添加的块:</p>
+<pre><code class="language-bash">PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe remove .\output.png RuSt
+Cli { subcommand: Remove(RemoveArgs { file_path: &quot;.\\output.png&quot;, chunk_type: &quot;RuSt&quot; }) }
+
+PS D:\Codes\Rust\pngme\target\debug&gt; .\pngme.exe print .\output.png
+Cli { subcommand: Print(PrintArgs { file_path: &quot;.\\output.png&quot; }) }
+Chunk
+        Length: 13
+        Type: IHDR
+        Data: Invalid UTF-8
+        CRC: 1807389920
+Chunk
+        Length: 4
+        Type: gAMA
+        Data: Invalid UTF-8
+        CRC: 201089285
+Chunk
+        Length: 46
+        Type: tEXt
+        Data: SoftwareXV version 3.10a-jumboFix of 20050410
+        CRC: 1223306120
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 1808155945
+Chunk
+        Length: 8192
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 977458620
+Chunk
+        Length: 4833
+        Type: IDAT
+        Data: Invalid UTF-8
+        CRC: 4100335391
+Chunk
+        Length: 7
+        Type: tIME
+        Data: Invalid UTF-8
+        CRC: 3731693981
+Chunk
+        Length: 0
+        Type: IEND
+        Data:
+        CRC: 2923585666
+</code></pre>
+<p>完美!</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[使用Rust实现简易web服务器 从单线程到多线程]]></title>
+        <id>https://LyntNy4n.github.io/post/toy_web_server/</id>
+        <link href="https://LyntNy4n.github.io/post/toy_web_server/">
+        </link>
+        <updated>2023-04-29T09:04:04.000Z</updated>
+        <summary type="html"><![CDATA[<p>PS.本文章基于https://course.rs/advance-practice1/intro.html,内容按照我自己的理解重新编排了一下,希望会有用(</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>PS.本文章基于https://course.rs/advance-practice1/intro.html,内容按照我自己的理解重新编排了一下,希望会有用(</p>
+<!-- more -->
+<h2 id="web服务器要做的事">web服务器要做的事</h2>
+<ol>
+<li>监听本地IP的某个端口传入的TCP连接</li>
+<li>对传入的连接进行处理</li>
+</ol>
+<p>在这里,我们的客户端是浏览器,那么TCP连接所带的数据就是HTTP请求了,GET请求报文大概长这样:</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-15897064238903.jpg" alt="-w1228" style="zoom:67%;" />
+<p>我们的玩具服务器所要做的事情很简单,假设我们监听127.0.0.1:7878,根据不同的访问的地址来返回不同的HTTP响应</p>
+<p>HTTP的响应报文是这样的:</p>
+<figure data-type="image" tabindex="1"><img src="https://www.runoob.com/wp-content/uploads/2013/11/httpmessage.jpg" alt="img" loading="lazy"></figure>
+<p>我们甚至只需要设置第一页的状态行和<code>Content-Length</code>(正文长度)就行了,然后响应正文部分就是html代码</p>
+<p>如果GET的是根目录(http://127.0.0.1:7878),设置状态行为<code>HTTP/1.1 200 OK</code>表示成功,body部分为简单的html,让浏览器显示出东西</p>
+<p>如果GET的是其他地方(比如http://127.0.0.1:7878/abcd),状态行就设置为<code>HTTP/1.1 404 NOT FOUND</code>表示没有这个网页,body部分为另一个表示404的html</p>
+<p>我们用2个html,一个是<code>hello.html</code>,用于根目录网址的响应:</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+
+&lt;head&gt;
+    &lt;meta charset=&quot;utf-8&quot;&gt;
+    &lt;title&gt;Hello!&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+    &lt;h1&gt;Hello!&lt;/h1&gt;
+    &lt;p&gt;Hi from Rust&lt;/p&gt;
+&lt;/body&gt;
+
+&lt;/html&gt;
+</code></pre>
+<figure data-type="image" tabindex="2"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20230429143654694.png" alt="image-20230429143654694" loading="lazy"></figure>
+<p>就是左上角显示这个而已</p>
+<p>一个是<code>404.html</code>:</p>
+<pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang=&quot;en&quot;&gt;
+
+&lt;head&gt;
+    &lt;meta charset=&quot;utf-8&quot;&gt;
+    &lt;title&gt;404!&lt;/title&gt;
+&lt;/head&gt;
+
+&lt;body&gt;
+    &lt;h1&gt;Sorry&lt;/h1&gt;
+    &lt;p&gt;404 Not found&lt;/p&gt;
+&lt;/body&gt;
+
+&lt;/html&gt;
+</code></pre>
+<figure data-type="image" tabindex="3"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20230429143757386.png" alt="image-20230429143757386" loading="lazy"></figure>
+<p>显示404</p>
+<h2 id="单线程版本实现">单线程版本实现</h2>
+<p>主体部分是这样的</p>
+<pre><code class="language-rust">use std::{
+    fs,
+    io::{BufRead, BufReader, Write},
+    net::{TcpListener, TcpStream},
+}; // 先不管这些,编译器会帮你引入的
+
+fn main() {
+    let listener = TcpListener::bind(&quot;127.0.0.1:7878&quot;).expect(&quot;Can not bind&quot;);
+    for stream in listener.incoming() {
+        let stream = stream.expect(&quot;Connection failed&quot;);
+        handle_connection(stream);
+    }
+}
+</code></pre>
+<p>我们使用<code>TcpListener::bind(&quot;127.0.0.1:7878&quot;)</code>来创建一个TCP socket,因为端口可能会被占用,所以我们<code>expect</code>一下,被占用就崩溃呗</p>
+<p>然后我们迭代<code>listener.incoming()</code>,这就相当于<code>while true</code>循环等待连接,只不过用了for的语法</p>
+<p>因为有连接传入不一定能成功建立连接,所以得<code>unwrap/expect</code>一下</p>
+<p>然后我们就用自己定义的<code>handle_connection</code>来处理连接了</p>
+<pre><code class="language-rust">fn handle_connection(mut stream: TcpStream) {
+    // read stream
+    let buf_reader = BufReader::new(&amp;stream);
+    let request_line = buf_reader.lines().next().unwrap().unwrap();
+    let (status_line, file_name) = match request_line.as_str() {
+        &quot;GET / HTTP/1.1&quot; =&gt; (&quot;HTTP/1.1 200 OK&quot;, &quot;hello.html&quot;),
+        _ =&gt; (&quot;HTTP/1.1 404 NOT FOUND&quot;, &quot;404.html&quot;),
+    };
+
+    let html_content =
+        fs::read_to_string(file_name).expect(&quot;Something went wrong reading the file&quot;);
+    let html_len = html_content.len();
+    let content = format!(&quot;{status_line}\r\nContent-Length: {html_len}\r\n\r\n{html_content}&quot;);
+    stream.write_all(content.as_bytes()).expect(&quot;Write failed&quot;);
+}
+</code></pre>
+<p>Tcp传数据是以字节流的形式的,为了避免频繁读取,我们用一个缓冲区<code>BufReader</code>来存放数据,并用<code>lines()</code>返回以行为单位的String迭代器.这里第一个<code>unwrap()</code>是因为<code>next()</code>返回<code>Option</code>,第二个是io的<code>Result&lt;String&gt;</code>.我们只需要请求的第一行就可以了,所以用了<code>next()</code>而不是for遍历</p>
+<p>然后根据<code>request_line</code>的内容去给出不同的响应</p>
+<p>我的html是放在代码根目录上了,所以用<code>fs::read_to_string</code>读html就完事了</p>
+<p>还要获得html代码的长度,用来设置<code>Content-Length</code></p>
+<p>然后把这些内容拼起来就可以了,要注意<code>\r\n</code>的数量,这是报文格式规定的</p>
+<p>最后把<code>content</code>,也就是响应报文写到TCP连接就可以了</p>
+<h2 id="多线程版本实现">多线程版本实现</h2>
+<p>单线程版本太捞了,只能处理一个连接,我们可以用多线程同时处理多个连接</p>
+<p>多线程下服务器要做的跟单线程差不多:</p>
+<ol>
+<li>监听本地IP的某个端口传入的TCP连接</li>
+<li>传入的连接分配给新的线程,该线程处理这个连接</li>
+</ol>
+<p>最简单的方式是这样的:</p>
+<pre><code class="language-rust">fn main() {
+    let listener = TcpListener::bind(&quot;127.0.0.1:7878&quot;).unwrap();
+    for stream in listener.incoming() {
+        let stream = stream.unwrap();
+        thread::spawn(|| {
+            handle_connection(stream);
+        });
+    }
+}
+</code></pre>
+<p>简单是简单,但它会生成无上限的线程数，可能会导致资源耗尽</p>
+<p>我们希望限制创建线程的数量,第三方库会有线程池来使用,但这里我们想自己手动写一个线程池</p>
+<p>新建一个文件<code>lib.rs</code>,在这里写,我们创建一个叫<code>ThreadPool</code>的结构</p>
+<p>我们想实现这样的功能:</p>
+<ul>
+<li>初始化<code>ThreadPool::new(最大线程数)</code> 线程池创建好线程</li>
+<li><code>ThreadPool.exec(|| func)</code> 线程池把任务(函数)丢给池中的一个线程,该线程执行完之后<strong>不销毁</strong>,回到池中待命,不然频繁地增删线程开销比较大,这也是线程池的初衷(不然我们用计数器就完事了)</li>
+</ul>
+<p>如何把任务丢给线程?也就是我们要把数据发给线程(函数也是数据),我们可以使用消息队列,而且是多生产者单消费者的(多个任务可以同时提交给线程池,但是只允许一个线程拿走其中的一个任务),rust的标准库就有这样的东西<code>std::sync::mpsc</code></p>
+<p>由此可见,我们的线程池应有2个部分:</p>
+<ol>
+<li>存储线程,使用<code>Vec</code>就不错</li>
+<li>消息队列,线程池是生产者,也就是发送者<code>sender</code></li>
+</ol>
+<p>线程的类型是什么? 根据<code>thread::spawn()</code>的类型签名</p>
+<pre><code class="language-rust">pub fn spawn&lt;F, T&gt;(f: F) -&gt; JoinHandle&lt;T&gt;
+    where
+        F: FnOnce() -&gt; T,
+        F: Send + 'static,
+        T: Send + 'static,
+}
+</code></pre>
+<p>可以得到是<code>JoinHandle&lt;T&gt;</code>,其实就是线程句柄(也可以看作标识符),T是闭包返回的类型,这里我们不用返回,用<code>()</code>即可</p>
+<p>那我们直接用<code>Vec&lt;JoinHandle&lt;()&gt;&gt;</code>来存就可以了吗? 其实也可以,但是为了后续管理(比如我们想用一个id来表示线程号),我们新创建一个<code>Worker</code>结构来存:</p>
+<pre><code class="language-rust">struct Worker {
+    id: usize,
+    thread: thread::JoinHandle&lt;()&gt;,
+}
+</code></pre>
+<p>最后,<code>ThreadPool</code>长这样:</p>
+<pre><code class="language-rust">pub struct ThreadPool {
+    workers: Vec&lt;Worker&gt;,
+    sender: mpsc::Sender&lt;Job&gt;, //消息队列中发射的那一端
+}
+type Job = Box&lt;dyn FnOnce() + Send + 'static&gt;; //该类型代表传入的任务(函数)
+</code></pre>
+<p><code>Job</code>也是根据<code>thread::spawn()</code>的类型签名得到的</p>
+<p>然后就是实现了</p>
+<pre><code class="language-rust">impl ThreadPool {
+    pub fn new(size: usize) -&gt; ThreadPool {
+        assert!(size &gt; 0);
+        let (sender, receiver) = mpsc::channel();
+        let receiver = Arc::new(Mutex::new(receiver));
+        let mut workers = Vec::with_capacity(size);
+        for id in 0..size {
+            workers.push(Worker::new(id, Arc::clone(&amp;receiver)));
+        }
+        ThreadPool {
+            workers,
+            sender,
+        }
+    }
+    pub fn execute&lt;F&gt;(&amp;self, f: F)
+    where
+        F: FnOnce() + Send + 'static,
+    {
+        let job = Box::new(f);
+        self.sender.send(job).unwrap();
+    }
+}
+</code></pre>
+<p><code>mpsc::channel()</code>返回两个类型,一个就是<code>Sender</code>,一个是<code>Receiver</code>,分别代表发送/接收端</p>
+<p>mpsc中,<code>Sender</code>可以<code>clone</code>,能由多个线程拥有.但<code>Receiver</code>不行,但可以发送<strong>引用</strong>给其他线程,即使用<code>Arc</code>引用计数.而且还得保证同一个时间只有一个<code>Receiver</code> 能接收消息，否则一个任务可能同时被多个 <code>Worker</code> 执行,所以还要加上<code>Mutex</code>来互斥使用接收端.然后我们把<code>id</code>和接收端给<code>Worker</code>就完成初始化了</p>
+<p><code>execute(func)</code>接收任务,然后立即往队列里发,使用<code>send()</code>就完事了,其中一个<code>Worker</code>收到任务,就去执行</p>
+<pre><code class="language-rust">impl Worker {
+    fn new(id: usize, receiver: Arc&lt;Mutex&lt;mpsc::Receiver&lt;Job&gt;&gt;&gt;) -&gt; Worker {
+        let thread = thread::spawn(move || loop {
+            let job = receiver.lock().unwrap().recv().unwrap();
+            println!(&quot;Worker {id} got a job; executing.&quot;);
+            job();
+        });
+        Worker { id, thread }
+    }
+}
+</code></pre>
+<p>其实这里我不太喜欢这种写法,在new里就执行东西了,不知道有没有更好的做法</p>
+<p>总之,new的时候就创建了一个新线程,在里面循环接收信息,获得任务之后就执行该任务</p>
+<p>由于<code>recv()</code>是阻塞的,线程不会拼命循环去跑</p>
+<p>完</p>
+<h2 id="最后">最后</h2>
+<p>正如原文所说的,本文的实现方法并不是在 Rust 中实现 Web 服务器的最佳方法</p>
+<p>一般来说，现代化的 web 服务器往往都基于更加轻量级的协程或 async/await (异步)等模式实现</p>
+<p>完整代码可以看 https://course.rs/advance-practice1/graceful-shutdown.html#完整代码</p>
+<p>原文最后还做了一点收尾工作,我觉得没有必要,就没讲了(</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[Python爬虫爬取某漫画网站的分享]]></title>
+        <id>https://LyntNy4n.github.io/post/grab_manga/</id>
+        <link href="https://LyntNy4n.github.io/post/grab_manga/">
+        </link>
+        <updated>2023-04-13T06:59:28.000Z</updated>
+        <summary type="html"><![CDATA[<p>试过用Rust写,但是不知道为什么总是403forbidden</p>
+]]></summary>
+        <content type="html"><![CDATA[<p>试过用Rust写,但是不知道为什么总是403forbidden</p>
+<!-- more -->
+<p>我之前是不会写爬虫的,但是因为自己用仓鼠癖,也即是把东西都囤到本地,然后因为之前有某站突然倒掉的事件(虽然之后又重开了),所以看到喜欢的漫画我都会想办法下载下来,就自己搜教程写出了一个爬虫脚本</p>
+<p><strong>注意:</strong> 由于该漫画网站是外网网站,且爬取图片会损害其利益,故本文章不会涉及该网站实际网址,脚本也不会放github上</p>
+<p>首先看看这个漫画网站的结构:</p>
+<ul>
+<li>具体某个漫画的url: https://xxx.com/漫画id/ 比如某漫画的id是2333,那么对应url就是 https://xxx.com/2333/</li>
+<li>漫画可以分为多话,url: https://xxx.com/漫画id/话数 但是第一话不用指明话数</li>
+<li>漫画的标题,作者等信息仅在第一话中展示,这些信息可以在url对应的html代码中找到</li>
+<li>图片的url: https://yyy.com/漫画对应的固定信息/漫画id/话数/图片编号.jpg 可以在html代码中找到</li>
+</ul>
+<p>根据以上信息,脚本大致就要做一下工作:</p>
+<ul>
+<li>打开url,获取网页的html代码</li>
+<li>根据漫画第一话的html,获得标题,作者,话数等信息.因为有比较固定的格式,可以使用正则表达式去获取</li>
+<li>根据各话的html获得所有图片url,也可以使用正则表达式去获取</li>
+<li>根据漫画的信息显示下载进度</li>
+</ul>
+<p>那就开始吧</p>
+<h2 id="各模块介绍">各模块介绍</h2>
+<h3 id="一些准备">一些准备</h3>
+<p>我们需要一些包和一些准备来支持上述工作,下面给出代码,python版本为3.11</p>
+<pre><code class="language-python">import os  # 用于创建文件/目录/代理等
+import re  # 导入正则表达式模块
+import urllib.request  # 导入用于打开URL的扩展库模块
+import urllib.error	   # 导入错误,用于try catch
+import opencc		   # 把繁体转为简体,因为网站是繁体中文
+
+os.environ[&quot;http_proxy&quot;] = &quot;http://127.0.0.1:7890&quot;
+os.environ[&quot;https_proxy&quot;] = &quot;http://127.0.0.1:7890&quot;
+
+t2s = opencc.OpenCC(&quot;t2s.json&quot;)
+
+headers = {
+    &quot;user-agent&quot;: &quot;Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.0.0 Safari/537.36&quot;,
+}
+</code></pre>
+<p>因为是外网网站,这里使用<code>os.environ</code>指定代理,我用的是clash,默认端口是7890</p>
+<p>第10行的<code>t2s</code>使用后续繁体转简体</p>
+<p>第12行的headers用于打开url所使用的UA,如果没有UA,一些网站会拒绝python访问</p>
+<p>urllib也可以用requests库代替,网上有其他教程,我觉得前者用起来简单一些</p>
+<h3 id="打开url">打开URL</h3>
+<pre><code class="language-python">def open_url(url: str) -&gt; str:
+    req = urllib.request.Request(
+        url,
+        headers=headers,
+    )  # 将Request类实例化并传入url为初始值，然后赋值给req 添加header，伪装成浏览器
+    # 访问url，并将页面的二进制数据赋值给page
+    page = urllib.request.urlopen(req)
+    # 将page中的内容转换为utf-8编码
+    html = page.read().decode(&quot;utf-8&quot;)
+    return html
+</code></pre>
+<p>简单直接,不解释</p>
+<h3 id="解析第一话获得漫画信息">解析第一话获得漫画信息</h3>
+<pre><code class="language-python">def get_info(first_html: str) -&gt; tuple[str, str, str, bool]:
+    pattern = r'&lt;meta name=&quot;keywords&quot; content=&quot;(.+)&quot;&gt;'
+    result = re.search(pattern, first_html)
+    assert result is not None
+    result = result[1].split(&quot;,&quot;)
+    vip_pattern = r'rel=&quot;tag&quot;&gt;會員專區'
+    vip_result = re.search(vip_pattern, first_html)
+    is_vip = vip_result is not None
+    title = t2s.convert(result[0])
+    author = result[1]
+
+    other_name_p = r&quot;其他名稱：(.+)?&lt;/p&gt;&quot;
+    other_name_result = re.search(other_name_p, first_html)
+    other_name = other_name_result[1] if other_name_result is not None else &quot;&quot;
+    return title, author, other_name, is_vip
+</code></pre>
+<p>输入漫画第一话html代码,返回漫画的标题,作者,别名,是否为vip专享</p>
+<p>为什么是第一话? 因为只有第一话的html才有这些信息,其他话就没有了</p>
+<p>各种pattern是正则表达式匹配html中的内容,比如第2行,假如漫画标题是aaa,作者是bbb,那么html的内容就会是<code>&lt;meta name=&quot;keywords&quot; content=&quot;aaa,bbb&quot;&gt;</code>.我们用正则匹配出<code>aaa,bbb</code>之后就可以<code>split</code>出来了</p>
+<p>因为漫画大都是日/韩漫,所以有日/韩文名,这时候别名就是它的日/韩文名,而标题一般是该漫画的中文名,但也有可能没有别名</p>
+<p><code>is_vip</code>表明了该漫画是否为vip专享,如果是vip专享,我们只能看到漫画的一些内容,之后的就看不到了(虽然也不是完全没办法,但我不会特地公开)</p>
+<h3 id="解析其他话的url">解析其他话的URL</h3>
+<pre><code class="language-python">def get_rest_url(html) -&gt; list[str]:
+    # 取得剩下集数的html,这个pattern不会搜索到当前的html
+    pattern = r'&lt;a href=&quot;(.+?)&quot; class=&quot;post-page-numbers&quot;'
+    result = re.findall(pattern, html)
+    return result
+</code></pre>
+<p>假如该漫画有5话,我们把第一话的html丢给该函数,就会返回2,3,4,5话的url,而不包含1话</p>
+<h3 id="解析url是哪一话">解析URL是哪一话</h3>
+<pre><code class="language-python">def get_episode(url: str) -&gt; tuple[str, int]:
+    pattern = r&quot;https://xxx.com/([0-9]+)/([0-9]+)&quot;
+    result = re.search(pattern, url)
+    if result is None:
+        return url, 1
+    episode = int(result[2])
+    main_url = f&quot;https://xxx.com/{result[1]}&quot;
+    return main_url, episode
+</code></pre>
+<p>输入漫画任意一话的url,返回该漫画的主url(也就是第一话)和当前话数</p>
+<p>为什么会有这个需求? 因为我们并不总是想要从第1话开始下载,如果该漫画现在共有5话,但是没有完结,你下载了5话.之后漫画又更新了2话,那你就应该从5话开始下载,这时候传入第5话的url,就知道你想从第5话开始下载,同时获得第1话的url(因为需要漫画的信息)</p>
+<h3 id="下载图片并保存">下载图片并保存</h3>
+<pre><code class="language-python">req = urllib.request.Request(img_url, headers=headers)
+img = urllib.request.urlopen(req)
+with open(path, &quot;wb&quot;) as f:
+	f.write(img.read())
+</code></pre>
+<p>这里没有把它们整合成函数,是因为实作中1-2行和3-4行因某些原因需要分开,后面会解释</p>
+<h2 id="总体代码">总体代码</h2>
+<pre><code class="language-python">if __name__ == &quot;__main__&quot;:
+    while True:
+        url = input(&quot;输入网址: &quot;).strip()
+        try:
+            comic = Comic(url)
+        except Exception as e:
+            print(e)
+        else:
+            comic.download()
+            print(&quot;下载完成!\n&quot;)
+</code></pre>
+<p>我们循坏获取url的输入,并创建一个<code>Comic</code>类,然后调用<code>download</code>方法. 这里用try catch让一些小错误不至于直接崩溃并打印出错误.比如输错url</p>
+<h3 id="comic类">Comic类</h3>
+<p>我们一段一段来看</p>
+<pre><code class="language-python">class Comic:
+    def __init__(self, url: str):
+        self.episode_list: list[Episode] = [] # 存放每话的url
+        self.first_html = open_url(url) #传入url的html,不一定总是第1话的url
+        rest_html = [open_url(x) for x in get_rest_url(self.first_html)]
+        self.total_episode = len(rest_html) + 1  # rest_html少了first_html自身的一话
+        self.main_url, self.first_episode = get_episode(url)
+        self.episode_html_list = [self.first_html] + rest_html[self.first_episode - 1 :]
+</code></pre>
+<p>最后一行有一点绕,我们从头到尾来看下:</p>
+<p>假设该漫画现在共有7话,我们想要第5话开始下载</p>
+<p>那我们就传入第5话的url来创建Comic类.<code>self.first_html</code>就是第5话的html,<code>rest_html</code>是除第5话外其他话的url,也就是1,2,3,4,6,7话(其他话的url不用一定在第1话的html获取,其他话也有,不然实际浏览时怎么跳转?).<code>self.total_episode</code>就是6+1=7话,然后<code>self.main_url, self.first_episode</code>就是第一话的url和当前url的话数(5). 我们需要第一话的url来提供漫画信息和拼接其他话数的url(https://xxx.com/漫画id/话数 但是第一话不用指明话数,所以话数为空,利于拼接).最后<code>self.episode_html_list</code>就是<code>self.first_html</code>加上<code>rest_html</code>从第五话开始之后的所有话数,也就是**[5]**+[1,2,3,4,<strong>6,7</strong>]中加粗部分</p>
+<p>之后是一些os的工作和信息打印</p>
+<pre><code class="language-python">        self.title, self.author, self.other_name, self.is_vip = get_info(
+            open_url(self.main_url)
+        )
+        dir_name = f&quot;[{self.author}]{self.title}&quot;
+        if self.other_name != &quot;&quot;:
+            dir_name += f&quot;｜{self.other_name}&quot;
+        # win的目录不能包含一些符号
+        dir_name = re.sub(r&quot;[\/\\\:\*\?\&quot;\&lt;\&gt;\|]&quot;, &quot; &quot;, dir_name)
+        self.dir_path = f&quot;D:/zzz/{dir_name}&quot;
+        if not os.path.exists(self.dir_path):
+            os.mkdir(self.dir_path)
+        print(f&quot;作者: {self.author} 漫画名: {self.title}&quot;)
+        if self.other_name != []:
+            print(f&quot;别名: {self.other_name}&quot;)
+        if self.is_vip:
+            print(&quot;vip漫画&quot;)
+        print(f&quot;共{self.total_episode}话,从第{self.first_episode}话开始下载&quot;)
+</code></pre>
+<p>应该挺好懂的,不多解释了</p>
+<p>最后对各个话创建<code>Episode</code>类,在该类里单独处理一话的内容</p>
+<pre><code class="language-python">        self.total_img = 0
+        for i, url in enumerate(self.episode_html_list, self.first_episode):
+            episode = Episode(url, i, self.dir_path)
+            self.episode_list.append(episode)
+            self.total_img += len(episode)
+</code></pre>
+<p>Episode类需要该话的url,该话的话数,下载目录.</p>
+<p><code>self.total_img</code>是图片总数,用于后续打印信息</p>
+<p>Comic类的download方法</p>
+<pre><code class="language-python">    def download(self):
+        already_downloaded = 0
+        for e in self.episode_list:
+            e.download(already_downloaded, self.total_img)
+            already_downloaded += len(e)
+</code></pre>
+<p>只是记录已经下载了多少图片,具体下载要给到Episode类,Episode类也有一个download方法</p>
+<h3 id="episode类">Episode类</h3>
+<p>Episode类也挺长,也一段一段看</p>
+<pre><code class="language-python">class Episode:
+    def __init__(self, html: str, episode: int, dir_path: str):
+        self.html = html
+        self.episode = episode
+        self.is_vip = is_vip_chapter(self.html)
+        self.dir_path = dir_path
+        self.set_img_list()
+
+    def __len__(self):
+        return len(self.img_list)
+
+    def set_img_list(self):
+        p = r'data-src=&quot;(https://yyy/.*?.jpg)&quot;'
+        self.img_list = re.findall(p, self.html)
+        if self.is_vip:
+            pass
+</code></pre>
+<p><code>self.is_vip</code>用于表示本话是不是vip话,前面说过有些漫画是vip话,但该漫画不是所有话都没法看,有些还是能免费看的,所以需要分别处理</p>
+<p><code>set_img_list</code>用于获取该话全部图片的url,然后根据该话是否为vip话进行处理(该文章不会涉及)</p>
+<p>下载部分</p>
+<pre><code class="language-python">    def download(self, already_downloaded: int, total_img: int):
+        for i, img_url in enumerate(self.img_list, 1):
+            self.try_download_img(img_url)
+            print(
+                &quot;\033[K&quot;
+                + &quot;\r&quot;
+                + f&quot;第{self.episode}话:{i}/{len(self)} 总共:{already_downloaded+i}/{total_img} &quot;,
+                end=&quot;&quot;,
+                flush=True,
+            )
+            
+    def try_download_img(self, img_url: str) -&gt; bool:
+        img_fullname = f'{self.episode}_{img_url.split(&quot;/&quot;)[-1]}'
+        path = f&quot;{self.dir_path}/{img_fullname}&quot;
+        if os.path.exists(path):
+            return True
+        try_time = 0
+        while True:
+            try:
+                req = urllib.request.Request(img_url, headers=headers)
+                img = urllib.request.urlopen(req)
+            except urllib.error.URLError as e:
+                try_time += 1
+                if try_time &gt;= 5:
+                    print(f&quot;{e} at {img_url}&quot;)
+                    raise e
+            else:
+                save_photo(img, path)
+                return True
+</code></pre>
+<p>这里我感觉挺屎山的,但是能用(</p>
+<p><code>download</code>基本是打印信息用的,<code>print</code>中的<code>&quot;\033[K&quot;&quot;\r&quot;</code>用于把光标退到改行的开头,<code>flush=True</code>允许覆盖当前行的内容</p>
+<p><code>try_download_img</code>输入图片的url,返回图片下载是否成功.但其实<code>download</code>里并没有使用到这个bool值,其实这个bool值在其他地方有用,但是这里不会涉及(</p>
+<p>因为我们是用代理下载图片的,有可能会抽风,这里<code>except urllib.error.URLError as e:</code>就是用来重试url错误的,以免抽风一次就直接不干了</p>
+<p>自此,整个脚本就完成了</p>
+<p>脚本运行的截图:</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/Snipaste_2023-04-13_14-56-29.jpg" alt="Snipaste_2023-04-13_14-56-29" loading="lazy"></figure>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[MS-MTO介绍]]></title>
+        <id>https://LyntNy4n.github.io/post/msmto/</id>
+        <link href="https://LyntNy4n.github.io/post/msmto/">
+        </link>
+        <updated>2023-04-12T06:27:32.000Z</updated>
+        <summary type="html"><![CDATA[<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css" integrity="sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js" integrity="sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+<p>在常见的一些任务上惊人地强</p>
+]]></summary>
+        <content type="html"><![CDATA[<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css" integrity="sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js" integrity="sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+<p>在常见的一些任务上惊人地强</p>
+<!-- more -->
+<h1 id="multi-surrogate-multi-tasking-optimization-of-expensive-problemsms-mto">Multi-surrogate multi-tasking optimization of expensive problems(MS-MTO)</h1>
+<p>昂贵问题的多代理多任务优化,论文建议训练两个代理模型,一个是使用所有可用数据训练的全局代理模型,另一个是只使用部分数据训练的局部代理模型</p>
+<p>所有使用真实目标函数评估的解都保存在一个<strong>存档/档案Arc</strong>中。然后,使用<strong>Arc中的所有数据将一个代理模型训练成全局模型(M<sub>g</sub>),以协助探索整个搜索空间。另一个代理模型在Arc中具有最佳适应度的样本上进行训练,成为一个局部代理模型(M<sub>l</sub>),以协助对局部区域的开发,这有望在一个有前途的子区域内近似原始函数。</strong></p>
+<p>**将全局和局部代理模型视为两个任务,将多代理模型引入MFEA.<strong>然而,我们不能保证两个不同的代理模型有相似的最优解,即使它们是在同一原始问题的数据上训练出来的。因此,这项工作采用了</strong>广义多因子进化算法(G-MFEA)**作为搜索方法,它能够更有效地解决最优解不在同一区域或搜索维度不同的多个任务。</p>
+<p>在MS-MTO中,探索和开发是通过同时优化全局和局部代理模型作为两个不同但相关的任务来进行的,这与传统SAEAs不同</p>
+<h3 id="算法流程">算法流程</h3>
+<p>代理模型使用RBF,激活函数是立方(cubic)函数 <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>ϕ</mi><mrow><mo fence="true">(</mo><mrow><mo fence="true">∥</mo><mi mathvariant="bold">x</mi><mo>−</mo><msub><mi mathvariant="bold">c</mi><mi>i</mi></msub><mo fence="true">∥</mo></mrow><mo fence="true">)</mo></mrow><mo>=</mo><msup><mrow><mo fence="true">(</mo><mrow><mo fence="true">∥</mo><mi mathvariant="bold">x</mi><mo>−</mo><msub><mi mathvariant="bold">c</mi><mi>i</mi></msub><mo fence="true">∥</mo></mrow><mo fence="true">)</mo></mrow><mn>3</mn></msup></mrow><annotation encoding="application/x-tex">\phi\left(\left\|\mathbf{x}-\mathbf{c}_{i}\right\|\right)=\left(\left\|\mathbf{x}-\mathbf{c}_{i}\right\|\right)^{3}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault">ϕ</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">c</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.204008em;vertical-align:-0.25em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">c</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.954008em;"><span style="top:-3.2029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span></span></span></span></span> 	<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708135947883.png" alt="image-20220708135947883" style="zoom: 40%;" align="right"/></p>
+<ol>
+<li>
+<p>使用拉丁超立方体抽样(LHS)生成N<sub>I</sub>个解决方案,使用真实的目标函数进行评估这些解决方案,并保存在一个存档Arc中</p>
+</li>
+<li>
+<p>进行下面的循环,直到计算预算用尽,即达到允许的最大适应度评价数量:</p>
+</li>
+<li>
+<p>使用Arc中的所有数据训练一个全局代理模型(M<sub>g</sub>);使用Arc中具有最佳适应度(要排序)的样本上训练一个局部代理模型(M<sub>l</sub>)</p>
+</li>
+<li>
+<p>确定用在多任务优化上的交配概率(下面有提到)</p>
+</li>
+<li>
+<p>根据算法2(G-MFEA小改),找到两个代理模型的目前最优解</p>
+</li>
+<li>
+<p>使用真实的目标函数进行评估上面两个解,以便在下一轮更新两个RBF代理模型</p>
+</li>
+<li>
+<p>把这两个解保存到Arc</p>
+</li>
+</ol>
+<p>输出Arc的最好解</p>
+<p>Arc中的初始样本数量不应过大或过小。如果初始样本的数量太大,计算资源将被浪费,而如果数据太小,代理模型的质量将太差,无法发挥作用。因此,N<sub>I</sub>将被设定为训练局部代理模型所需的数据数量,假设训练局部代理模型所需的数据数量通常不超过训练全局模型的数据数量。</p>
+<h4 id="一个例子">一个例子</h4>
+<p><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708140640764.png" alt="image-20220708140640764" style="zoom: 80%;" />				<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708140652243.png" alt="image-20220708140652243" style="zoom: 80%;" /></p>
+<p>图1给出了一个说明性的例子,以显示本工作中全局和局部代理模型的贡献。假设在第t代的存档中有8个样本(图1(a)中的黑点)。所有这些样本都被用来训练全局代理模型M<sub>g</sub>(用蓝色虚线表示)。而局部代理模型M<sub>l</sub>(用粉色虚线表示)是用四个具有最佳适应度的样本来训练的。假设到目前为止发现的Mg和Ml的最佳解决方案分别是x1和x2</p>
+<p>那么这两个解决方案将使用真实的目标函数进行评估,并保存在档案中,以便在下一代更新两个代理模型Mg和Ml。图1(b)显示了在上一代评估了x1和x2后,在第t+1代更新的全局和局部代理模型.我们可以看到,全局代理模型Mg的最优解,表示为x3,现在更接近于实际目标问题的最优解,这是由之前的局部代理模型找到的解x2贡献的。在这个例子中,到目前为止在第t代发现的全局代理模型的最佳解并没有对局部代理模型的更新做出贡献,因为它不包括在局部代理模型的训练数据中。总之,更新后的本地代理模型可以更好地捕捉到真实目标函数的分布</p>
+<h4 id="交配概率交叉概率μ变异概率σ">交配概率(交叉概率μ,变异概率σ)</h4>
+<p>交配概率被用来平衡多任务优化中搜索的探索和利用。一个小的交配概率意味着强调对搜索空间有限区域的利用,一个大的交配概率将促进对整个搜索空间的探索。</p>
+<p>在所提出的MS-MTO方法的初始阶段,两个代理模型的最优解可能有很大差异,因为用于训练局部代理模型的数据分布在整个决策空间。因此,在第一阶段应使用小的交配概率来利用局部区域。</p>
+<p>随着评估找到的全局和局部代理模型的最优解,训练数据将会增加,可用于训练局部代理模型的数据将分布在搜索空间的一个子区域。因此,在这个子区域中,局部模型的分布将与全局模型的分布更加相似,使得搜索更有可能陷于局部最优。这时候我们建议扩大交配概率,以帮助摆脱局部最优。</p>
+<p>听起来像动态的rmp</p>
+<h5 id="交配概率选择">交配概率选择</h5>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708153745329.png" alt="image-20220708153745329" style="zoom:80%;" />
+<p>µ和σ分别代表交叉和变异的概率。µ1,σ1表示对于每个多任务优化,交叉(µ)和突变(σ)设置为1。µ1-10,σ1-10表示交叉和突变的概率从1变为10,其值=(MTO<sub>calls</sub>/10 + 1),其中MTO<sub>calls</sub>是迄今为止多任务优化的总调用数。从图4中,我们可以清楚地看到,<strong>交配概率线性增加</strong>的方法可以获得比其他交叉和变异概率固定的方法更好的性能。</p>
+<h4 id="全局和局部的多任务优化">全局和局部的多任务优化</h4>
+<p>全局和局部代理模型一起是否能更好地促进找到原始问题的最优解,取决于两个代理模型的分布,这又在很大程度上取决于训练数据集。多任务优化已被证明可以提高搜索性能,特别是当不同的任务在其适应度分布中具有相似的特征时。</p>
+<p>算法2给出了在两个代理模型上进行优化的多任务优化算法的伪代码。在这项工作中没有使用G-MFEA中提出的洗牌(shuffling)技术</p>
+<p>输入:全局代理模型M<sub>g</sub>,局部代理模型M<sub>l</sub>,最大迭代次数Kmax,交叉概率μ,变异概率σ</p>
+<p>输出:两个代理模型的最优解</p>
+<ol>
+<li>生成一个具有N<sub>P</sub>个体的初始种群P。注意这里有个<strong>历史数据选择策略</strong>,要从Arc中选一些历史解决方案放到初始种群中,用来帮助探索与当前最优解决方案所在区域不同的区域。<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708150222983.png" alt="image-20220708150222983" style="zoom: 55%;" align="right"/></li>
+<li>初始种群P中的所有个体将分别使用全局和局部代理模型进行评估</li>
+<li>计算种群中每个个体的技能因子(根据每个任务的因子排名来确定)</li>
+<li>当停止标准(达到预先定义的最大迭代次数)没有达到时,将重复以下步骤:</li>
+<li>每个个体通过<strong>决策变量翻译策略</strong>被映射到一个新的位置</li>
+<li>与MFEA类似,通过同种交配策略产生一个子代种群C</li>
+<li>子代种群C通过决策变量翻译策略翻译回去</li>
+<li>子代种群C中的每个个体将根据垂直文化传播被分配一个技能因子</li>
+<li>并在相应的任务(两个代理模型中的一个)上进行评估</li>
+<li>P和C拼接成中间种群R</li>
+<li>更新R中的标量适应度</li>
+<li>从R中选择下一代种群P</li>
+</ol>
+<p>输出两个代理模型的最优解</p>
+<h4 id="历史数据选择策略">历史数据选择策略</h4>
+<p>当多任务优化开始寻找两个任务的最优解,即更新的全局和局部代理模型时,首先会产生一个新的初始群体。为了找到比目前发现的计算成本高的问题的最佳解决方案,Arc中的一些历史解决方案将被包括在初始化群体中,这些解决方案已经使用真正昂贵的函数进行了评估。我们对历史数据的选择进行了五种不同的策略,即HD0、HD25、HD50、HD100和HD25-1。假设NP是种群规模,HD0、HD25、HD50和HD100分别表示初始种群的N<sub>P</sub>解决方案的0%、25%、50%和100%将从档案Arc中复制,其中的解决方案按升序排序(从好到坏)。也就是说,档案中最好的解决方案将被用于初始化部分群体。HD25-1与HD25不同,它首先从Arc档案中挑选出50%N<sub>P</sub>的最佳解(相当于HD50),然后随机选择这些解中的一半复制到初始种群中。这保证了初始种群总是包含迄今为止发现的最佳解决方案。</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708153326792.png" alt="image-20220708153326792" style="zoom:80%;" />
+<p>初始群体中包含历史数据的方法的性能要比没有数据的方法好得多。此外,<strong>HD25-1相对稳定</strong>,可以分别获得比HD25、HD50和HD100更好的结果</p>
+<h4 id="决策变量翻译策略">决策变量翻译策略</h4>
+<p>决策变量翻译策略将个体的解映射到一个新的空间,其中所有任务的最优解都位于同一位置,可以在增强种群多样性和加速种群收敛之间保持更好的平衡</p>
+<p>详情去看G-MFEA论文.简单来说就是同种交配前把各决策变量加减一下,交配得到子代后,子代把自己的各决策变量加减回去</p>
+<h3 id="实验">实验</h3>
+<p>从所提出的MS-MTO算法的详细描述中,我们可以看出MS-MTO算法的性能主要依赖于三个部分：用于优化两个任务的初始群体P,即全局和局部代理模型；多任务算法优化两个任务的停止准则；交配概率。</p>
+<p>我们对30维Ellipsoid和Rastrigin问题进行了试验研究,这两个问题分别是单模态和多模态的,以确定合适的参数设置。然后,我们分析了所提算法的搜索动态和计算复杂性。接下来,为了考察多任务优化的贡献,我们还对12个分别具有10、20、30、50、100和200维的测试问题进行了比较研究。最后,我们提出的MS-MTO算法得到的实验结果将与最近提出的一些处理计算量大的问题的方法进行比较,包括CAL-SAPSO[40]、GORS-SLPSO[30]、SHPSO[38]、SA-COSO[37]、MGP-SLPSO[25]和SAMSO[31],以评价我们提出的方法在低维和高维问题上的性能。</p>
+<h3 id="总结">总结</h3>
+<p>使用代理技术解决计算成本高的问题仍然具有挑战性,特别是当维度变得很高时。本文提出构建一个全局和一个局部的代理,通过多任务优化方法一起解决这些问题。然后,在开始新一轮的多任务优化之前,使用真实的目标函数对发现的最优值进行评估,并将其添加到档案中,以更新全局和局部代理指标。此外,在优化过程中对多任务优化的交配概率进行调整,以控制知识转移的程度。实验结果表明,所提出的算法在低维和高维问题上都优于本工作中研究的最先进的算法。</p>
+<p>据我们所知,这是第一次尝试建立两个代理模型并使用进化多任务优化来搜索这两个代理模型。很容易想象,可以使用不同的训练数据训练更多的代理模型来进一步提高搜索效率,其中促进多个代理模型多样性的有效方法可能是至关重要的。此外,如何开发新的算法来寻找一个具有狭窄山谷的多模型问题的良好解决方案仍然是一项具有挑战性的任务。</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[TLRBF介绍]]></title>
+        <id>https://LyntNy4n.github.io/post/tlrbf/</id>
+        <link href="https://LyntNy4n.github.io/post/tlrbf/">
+        </link>
+        <updated>2023-04-12T06:20:43.000Z</updated>
+        <summary type="html"><![CDATA[<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css" integrity="sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js" integrity="sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+<p>很神奇的, 使用了RBF但是速度却不快(</p>
+]]></summary>
+        <content type="html"><![CDATA[<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css" integrity="sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js" integrity="sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+<p>很神奇的, 使用了RBF但是速度却不快(</p>
+<!-- more -->
+<h1 id="a-three-level-radial-basis-function-method-for-expensive-optimization">A Three-Level Radial Basis Function Method for Expensive Optimization</h1>
+<p><strong>TLRBF</strong> 用于昂贵优化的三层径向基函数方法</p>
+<p>本文提出了一种三层RBF（TLRBF）辅助的优化算法来处理昂贵优化的问题。更具体地说，为了<strong>整合整个搜索空间的粗粒度全局搜索（GS）、有希望的子区域的中粒度子区域搜索（SS）和最有希望的局部区域的细粒度局部搜索（LS）</strong>，在TLRBF的每个迭代中，分别产生三种解决方案供GS、SS和LS评估。在GS中，所有可用的解决方案被用来构建一个全局RBF近似函数，然后使用随机抽样方法来提供一个新的解决方案，该解决方案具有良好的目标函数值，并与先前评估的解决方案保持一定的距离。在SS中，由模糊聚类确定的可用解决方案的一个子集被用来训练一个子区域RBF近似函数，然后由优化器对其进行优化，以找到其最佳的精确评价。在LS中，当前的最佳解决方案和它的邻居被用来建立一个局部的RBF近似函数，该函数也被一个优化器最小化，以找到其最佳评估。</p>
+<h3 id="背景知识">背景知识</h3>
+<h4 id="rbf-径向基函数">RBF 径向基函数</h4>
+<p>所谓径向基函数，其实就是某种沿径向对称的标量函数。通常定义为空间中任一点x到某一中心c之间欧氏距离的单调函数，可记作φ(||x-c||)，其作用往往是局部的，即当x远离c时函数取值很小</p>
+<p>如高斯径向基函数：<span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>R</mi><mi>B</mi><mi>F</mi><mo>(</mo><mi>x</mi><mo separator="true">,</mo><mi>c</mi><mo>)</mo><mo>=</mo><mi>e</mi><mi>x</mi><mi>p</mi><mrow><mo fence="true">(</mo><mo>−</mo><mfrac><mrow><mo>(</mo><mi>x</mi><mo>−</mo><mi>c</mi><msup><mo>)</mo><mn>2</mn></msup></mrow><msup><mi>r</mi><mn>2</mn></msup></mfrac><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">RBF(x,c)=exp\left( - \frac{(x-c)^2}{r^2}\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mord mathdefault" style="margin-right:0.05017em;">B</span><span class="mord mathdefault" style="margin-right:0.13889em;">F</span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault">c</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.80002em;vertical-align:-0.65002em;"></span><span class="mord mathdefault">e</span><span class="mord mathdefault">x</span><span class="mord mathdefault">p</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord">−</span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.10892em;"><span style="top:-2.6550000000000002em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.02778em;">r</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.7463142857142857em;"><span style="top:-2.786em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.485em;"><span class="pstrut" style="height:3em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathdefault mtight">x</span><span class="mbin mtight">−</span><span class="mord mathdefault mtight">c</span><span class="mclose mtight"><span class="mclose mtight">)</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913142857142857em;"><span style="top:-2.931em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.345em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span></span></span></span></p>
+<p>径向基函数的诞生主要是为了解决多变量插值的问题,比如下图:</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/rbf-1.png" alt="img" loading="lazy"></figure>
+<p>左图中每个蓝色的点是一个样本.在每个样本上面放一个基函数,如中间图,绿色虚线表示的是每个训练样本对应的一个径向基函数（以高斯函数为例),样本点也叫<strong>中心(center)点</strong></p>
+<p>假设真实函数曲线是蓝色的那根（最右边的图），如果我们有一个新的数据x1，我们想知道它对应的f(x1)是多少，也就是a点的纵坐标是多少。那么可以看到，a点的纵坐标等于b点的纵坐标加上c点的纵坐标。而b的纵坐标是第一个样本点的径向基函数的值乘以一个大一点的权值得到的，c的纵坐标是第二个样本点的径向基函数的值乘以另一个小点的权值得到。而其他样本点的权值全是0，因为我们要插值的点x1在第一和第二个样本点之间，远离其他的样本点，那么插值影响最大的就是离得近的点，离的远的就没什么贡献了。所以x1点的函数值由附近的b和c两个点就可以确定了。拓展到任意的新的x，这些红色的径向基函数乘以一个权值后再在对应的x地方加起来，就可以完美的拟合真实的函数曲线了。</p>
+<p>总结就是，<strong>RBF根据某种距离来描述点与某个中心点的的相似度</strong></p>
+<h5 id="规范定义">规范定义</h5>
+<p>RBF插值模型可以表示为</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>S</mi><mo>(</mo><mi mathvariant="bold">x</mi><mo>)</mo><mo>=</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>K</mi></munderover><msub><mi>w</mi><mi>k</mi></msub><mi>ϕ</mi><mrow><mo fence="true">(</mo><mrow><mo fence="true">∥</mo><mi mathvariant="bold">x</mi><mo>−</mo><msub><mi mathvariant="bold">x</mi><mi>k</mi></msub><mo fence="true">∥</mo></mrow><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">S(\mathbf{x}) = \sum_{k = 1}^{K} w_{k} \phi\left(\left\|\mathbf{x}-\mathbf{x}_{k}\right\|\right)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.05764em;">S</span><span class="mopen">(</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:3.1304490000000005em;vertical-align:-1.302113em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8283360000000002em;"><span style="top:-1.8478869999999998em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.0500049999999996em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.300005em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.07153em;">K</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.302113em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.02691em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathdefault">ϕ</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span></span></span></span></span></p>
+<p>W = (w1, w2,..., wK)<sup>T</sup>是权重向量,φ就是基函数.一组中心点{x1, x2,..., xK}组成训练数据集D={(x<sub>i</sub>, f(x<sub>i</sub>)), i = 1, 2,..., N}，其中N是训练数据集的大小。</p>
+<p>为了算出权重向量W，应该满足以下插值条件(就是上面说的用多组基函数拟合中心点):</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>S</mi><mrow><mo fence="true">(</mo><msub><mi mathvariant="bold">x</mi><mi>i</mi></msub><mo fence="true">)</mo></mrow><mo>=</mo><mi>f</mi><mrow><mo fence="true">(</mo><msub><mi mathvariant="bold">x</mi><mi>i</mi></msub><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">S\left(\mathbf{x}_{i}\right)=f\left(\mathbf{x}_{i}\right)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.10764em;">f</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span></span></span></span></span></p>
+<p>可以用矩阵形式写成:</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi mathvariant="bold">Φ</mi><mi mathvariant="bold">W</mi><mo>=</mo><mi mathvariant="bold">f</mi></mrow><annotation encoding="application/x-tex">\mathbf{\Phi} \mathbf{W}=\mathbf{f}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68611em;vertical-align:0em;"></span><span class="mord"><span class="mord mathbf">Φ</span></span><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.69444em;vertical-align:0em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.10903em;">f</span></span></span></span></span></span></p>
+<p><span class="katex"><span class="katex-mathml"><math><semantics><mrow><msub><mi mathvariant="bold-italic">Φ</mi><mrow><mi>i</mi><mo separator="true">,</mo><mi>j</mi></mrow></msub><mo>=</mo><mi>ϕ</mi><mrow><mo fence="true">(</mo><mrow><mo fence="true">∥</mo><msub><mi mathvariant="bold">x</mi><mi>i</mi></msub><mo>−</mo><msub><mi mathvariant="bold">x</mi><mi>j</mi></msub><mo fence="true">∥</mo></mrow><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\boldsymbol{\Phi}_{i, j}=\phi\left(\left\|\mathbf{x}_{i}-\mathbf{x}_{j}\right\|\right)</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.972218em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord"><span class="mord"><span class="mord boldsymbol">Φ</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span><span class="mpunct mtight">,</span><span class="mord mathdefault mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.036108em;vertical-align:-0.286108em;"></span><span class="mord mathdefault">ϕ</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span></span></span></span> , f=[f(x1),f(x2),...,f(xn)]<sup>T</sup></p>
+<p>通过解决线性方程组，可以得到权重向量W，即 <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi mathvariant="bold">W</mi><mo>=</mo><msup><mrow><mo fence="true">(</mo><msup><mi mathvariant="bold-italic">Φ</mi><mi>T</mi></msup><mi mathvariant="bold-italic">Φ</mi><mo fence="true">)</mo></mrow><mrow><mo>−</mo><mn>1</mn></mrow></msup><msup><mi mathvariant="bold-italic">Φ</mi><mi>T</mi></msup><mi mathvariant="bold">f</mi></mrow><annotation encoding="application/x-tex">\mathbf{W}=\left(\boldsymbol{\Phi}^{T} \boldsymbol{\Phi}\right)^{-1} \boldsymbol{\Phi}^{T} \mathbf{f}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.68611em;vertical-align:0em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">W</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.004028em;vertical-align:-0.65002em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord"><span class="mord"><span class="mord"><span class="mord boldsymbol">Φ</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.917341em;"><span style="top:-3.1390100000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.13889em;">T</span></span></span></span></span></span></span></span></span><span class="mord"><span class="mord"><span class="mord boldsymbol">Φ</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:1.3540079999999999em;"><span style="top:-3.6029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">−</span><span class="mord mtight">1</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord"><span class="mord"><span class="mord boldsymbol">Φ</span></span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.917341em;"><span style="top:-3.1390100000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.13889em;">T</span></span></span></span></span></span></span></span></span><span class="mord"><span class="mord mathbf" style="margin-right:0.10903em;">f</span></span></span></span></span></p>
+<p>在这篇文章中，采用了以下的多元函数作为基函数:</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>ϕ</mi><mo>(</mo><mi>r</mi><mo>)</mo><mo>=</mo><msqrt><mrow><msup><mi>r</mi><mn>2</mn></msup><mo>+</mo><msup><mi>δ</mi><mn>2</mn></msup></mrow></msqrt></mrow><annotation encoding="application/x-tex">\phi(r)=\sqrt{r^{2}+\delta^{2}}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault">ϕ</span><span class="mopen">(</span><span class="mord mathdefault" style="margin-right:0.02778em;">r</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.2399999999999998em;vertical-align:-0.177736em;"></span><span class="mord sqrt"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0622639999999999em;"><span class="svg-align" style="top:-3.2em;"><span class="pstrut" style="height:3.2em;"></span><span class="mord" style="padding-left:1em;"><span class="mord"><span class="mord mathdefault" style="margin-right:0.02778em;">r</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.740108em;"><span style="top:-2.9890000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.03785em;">δ</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.740108em;"><span style="top:-2.9890000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span></span></span></span></span></span></span></span><span style="top:-3.0222640000000003em;"><span class="pstrut" style="height:3.2em;"></span><span class="hide-tail" style="min-width:1.02em;height:1.28em;"><svg width='400em' height='1.28em' viewBox='0 0 400000 1296' preserveAspectRatio='xMinYMin slice'><path d='M263,681c0.7,0,18,39.7,52,119c34,79.3,68.167,
+158.7,102.5,238c34.3,79.3,51.8,119.3,52.5,120c340,-704.7,510.7,-1060.3,512,-1067
+c4.7,-7.3,11,-11,19,-11H40000v40H1012.3s-271.3,567,-271.3,567c-38.7,80.7,-84,
+175,-136,283c-52,108,-89.167,185.3,-111.5,232c-22.3,46.7,-33.8,70.3,-34.5,71
+c-4.7,4.7,-12.3,7,-23,7s-12,-1,-12,-1s-109,-253,-109,-253c-72.7,-168,-109.3,
+-252,-110,-252c-10.7,8,-22,16.7,-34,26c-22,17.3,-33.3,26,-34,26s-26,-26,-26,-26
+s76,-59,76,-59s76,-60,76,-60z M1001 80H40000v40H1012z'/></svg></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.177736em;"><span></span></span></span></span></span></span></span></span></span></p>
+<p>δ是基函数的形状参数</p>
+<p>最后，对于一个新的输入x<sup>∗</sup>，其预测的输出可以用下式计算:</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>S</mi><mrow><mo fence="true">(</mo><msup><mi mathvariant="bold">x</mi><mo>∗</mo></msup><mo fence="true">)</mo></mrow><mo>=</mo><munderover><mo>∑</mo><mrow><mi>k</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></munderover><msub><mi>w</mi><mi>k</mi></msub><mi>ϕ</mi><mrow><mo fence="true">(</mo><mrow><mo fence="true">∥</mo><msup><mi mathvariant="bold">x</mi><mo>∗</mo></msup><mo>−</mo><msub><mi mathvariant="bold">x</mi><mi>k</mi></msub><mo fence="true">∥</mo></mrow><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">S\left(\mathbf{x}^{*}\right)=\sum_{k=1}^{N} w_{k} \phi\left(\left\|\mathbf{x}^{*}-\mathbf{x}_{k}\right\|\right)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.05764em;">S</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.738696em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">∗</span></span></span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:3.1304490000000005em;vertical-align:-1.302113em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8283360000000002em;"><span style="top:-1.8478869999999998em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.0500049999999996em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∑</span></span></span><span style="top:-4.300005em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.10903em;">N</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.302113em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.02691em;">w</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-left:-0.02691em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mord mathdefault">ϕ</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.738696em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">∗</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03148em;">k</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span></span></span></span></span></p>
+<h5 id="常见的基函数">常见的基函数</h5>
+<p>径向基函数有几类，如高斯函数、立方样条、线性样条等(Gaussian function, cubic spline, and linear spline)</p>
+<p>立方样条曲线在小的计算预算下具有优异的性能,其表达式 $ \phi\left(\left|\mathbf{x}-\mathbf{x}<em>{i}\right|\right)=\left(\left|\mathbf{x}-\mathbf{x}</em>{i}\right|\right)^{3} $</p>
+<h3 id="所提算法">所提算法</h3>
+<p>算法涉及三种&quot;搜索&quot;:</p>
+<p><strong>粗粒度全局搜索（GS）</strong>:它可以探索不同的下层盆地，以避免陷于局部最优区域</p>
+<p><strong>中粒度子区域搜索（SS）</strong>:它可以利用已经发现的有希望的盆地，以确定哪一个盆地是最有希望的。</p>
+<p><strong>细粒度局部搜索（LS）</strong>:它可以有效地开发最有潜力的盆地</p>
+<p>人话:一个函数可能有多个不同的深坑,GS找出深坑,SS找出坑深的部分,LS找出该部分的最深处</p>
+<p>GS、SS和LS协同工作，可以实现探索和开发之间的良好平衡。</p>
+<p>首先介绍所提出的TLRBF算法的总体框架，然后详细介绍GS、SS和LS</p>
+<h4 id="总体框架">总体框架</h4>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220607163813450.png" alt="image-20220607163813450" style="zoom:67%;" />
+<p>一开始，一组初始样本(作为中心点)x<sub>Init</sub> = {x1, x2, . . . , x<sub>n0</sub>}通过某种方法在整个搜索空间Ω产生，n0是初始样本的数量。本文采用拉丁超立方体抽样（LHS）方法产生初始样本，然后，初始训练数据集D<sub>I</sub> = {（xi, fi）, i = 1, 2, . ，n0}。初始化后，该算法迭代更新D，直到满足停止标准。</p>
+<p>在每一次迭代中:</p>
+<p>在全局层面，利用数据库D构建一个全局RBF模型S<sub>G</sub>(x)。基于S<sub>G</sub>(x)，GS在整个搜索空间中搜索一个有希望的、未开发的解决方案x<sup>G</sup>，进行昂贵的评估。</p>
+<p>在中等水平上，根据模糊聚类选择当前数据库D的一个子集D<sub>S</sub>，并建立一个子区域RBF模型S<sub>S</sub>(x)。基于S<sub>S</sub>(x)，SS通过在子搜索空间中最小化S<sub>S</sub>(x)找到一个有希望的解决方案x<sup>S</sup>。</p>
+<p>在局部层面上，当前的最佳解x<sub>b</sub>及其k个最近的邻居(KNN)被用来建立局部RBF模型S<sub>L</sub>(x)，并通过在相应的LS空间中优化S<sub>L</sub>(x)得到新的解x<sup>L</sup>。当满足停止标准时，数据库D中的最佳解x<sub>b</sub>将成为最终解。</p>
+<p>本文使用Jade作为优化器来求解SS和LS的次优化问题</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220607165557308.png" alt="image-20220607165557308" style="zoom: 33%;" />
+<p>上图显示了TLRBF在椭球问题(d=2)的一次迭代中的搜索过程。蓝色实心框、品红色点划线框和红色虚线框分别表示GS区域、SS区域和LS区域。<strong>在一次迭代中</strong>，GS、SS和LS分别在整个搜索空间、一个子区域和一个局部区域生成三个解。黑点是之前评估过的解决方案。蓝色正方形点、洋红色菱形点和红色六角星点分别由GS、SS和LS生成。</p>
+<p>下图以另一个视角呈现不同的搜索范围:</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220607172619991.png" alt="image-20220607172619991" style="zoom: 33%;" />
+<p>整个搜索空间为Ω = [-1.2, 1]，子区域为ΩS = [-1.1, -0.4]，局部区域为ΩL= [−0.9, −0.7]</p>
+<h4 id="全局搜索gs">全局搜索GS</h4>
+<p>GS专注于探索整个搜索空间中<strong>尚未开发</strong>和有前途的领域Ω,使用所有可用解来构造全局代理模型S<sub>G</sub>(X)，以刻画整个适应度概览。</p>
+<p>基于全局模型和评估点，新的解xG被确定如下：(解是一个集合,不只是一个点)</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mtable><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><msup><mi mathvariant="bold">x</mi><mi>G</mi></msup></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><munder><mo><mi>arg</mi><mo>⁡</mo><mi>min</mi><mo>⁡</mo></mo><mrow><mi mathvariant="bold">y</mi><mo>∈</mo><mi mathvariant="bold">B</mi></mrow></munder><msub><mi>S</mi><mi>G</mi></msub><mo>(</mo><mi mathvariant="bold">y</mi><mo>)</mo></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><mi mathvariant="bold">B</mi></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mrow><mo fence="true">{</mo><mi mathvariant="bold">y</mi><mo>∣</mo><mi mathvariant="bold">y</mi><mo>∈</mo><mi mathvariant="bold">A</mi><mo separator="true">,</mo><munder><mi>min</mi><mo>⁡</mo><mrow><mi mathvariant="bold">x</mi><mo>∈</mo><mi mathvariant="bold">D</mi></mrow></munder><mi mathvariant="normal">∥</mi><mi mathvariant="bold">y</mi><mo>−</mo><mi mathvariant="bold">x</mi><mi mathvariant="normal">∥</mi><mo>&gt;</mo><mi>α</mi><msub><mi mathvariant="normal">Δ</mi><mi>G</mi></msub><mo fence="true">}</mo></mrow></mrow></mstyle></mtd></mtr></mtable><annotation encoding="application/x-tex">\begin{aligned}
+\mathbf{x}^{G} &amp;=\underset{\mathbf{y} \in \mathbf{B}}{\arg \min } S_{G}(\mathbf{y}) \\
+\mathbf{B} &amp;=\left\{\mathbf{y} \mid \mathbf{y} \in \mathbf{A}, \min _{\mathbf{x} \in \mathbf{D}}\|\mathbf{y}-\mathbf{x}\|&gt;\alpha \Delta_{G}\right\}
+\end{aligned}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:4.968185999999999em;vertical-align:-2.2340929999999997em;"></span><span class="mord"><span class="mtable"><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.7340929999999997em;"><span style="top:-5.292762em;"><span class="pstrut" style="height:3.45em;"></span><span class="mord"><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913309999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">G</span></span></span></span></span></span></span></span></span></span></span><span style="top:-2.4659370000000007em;"><span class="pstrut" style="height:3.45em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">B</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.2340929999999997em;"><span></span></span></span></span></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:2.7340929999999997em;"><span style="top:-5.292762em;"><span class="pstrut" style="height:3.45em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord"><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6678600000000001em;"><span style="top:-1.8592830000000002em;margin-left:0em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathbf mtight" style="margin-right:0.01597em;">y</span></span><span class="mrel mtight">∈</span><span class="mord mtight"><span class="mord mathbf mtight">B</span></span></span></span></span><span style="top:-2.7em;"><span class="pstrut" style="height:2.7em;"></span><span><span class="mop"><span class="mop">ar<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.076825em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.05764em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">G</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">y</span></span><span class="mclose">)</span></span></span><span style="top:-2.4659370000000007em;"><span class="pstrut" style="height:3.45em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">{</span></span><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">y</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∣</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">y</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">∈</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord"><span class="mord mathbf">A</span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.66786em;"><span style="top:-2.053723em;margin-left:0em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathbf mtight">x</span></span><span class="mrel mtight">∈</span><span class="mord mtight"><span class="mord mathbf mtight">D</span></span></span></span></span><span style="top:-2.7em;"><span class="pstrut" style="height:2.7em;"></span><span><span class="mop">min</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.773647em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">∥</span><span class="mord"><span class="mord mathbf" style="margin-right:0.01597em;">y</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord mathbf">x</span></span><span class="mord">∥</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord mathdefault" style="margin-right:0.0037em;">α</span><span class="mord"><span class="mord">Δ</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">G</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">}</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.2340929999999997em;"><span></span></span></span></span></span></span></span></span></span></span></span></p>
+<p>其中，A = {y1, y2, . . . , ym}是一个大的样本集，在搜索空间Ω中均匀地随机生成(和中心点集不是一个东西)</p>
+<p>B是A的一个子集，<strong>只包括</strong>A中满足距离约束的样本；D是当前的数据库，由所有先前评估的点组成；ΔG = max<sub>y∈A</sub>min<sub>x∈D</sub>||y - x||是最大距离约束,0 ≤ α &lt; 1是比例因子</p>
+<p>大概的例子:</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220607212403436.png" alt="image-20220607212403436" style="zoom: 67%;" />
+<p>黑色是中心点,粉色圈是距离约束,红色和蓝色点组成A.圈内的红色点由于里中心点太近从而不采用,而蓝色的点都不在粉圈内,符合要求,会纳入B中</p>
+<p>这种填充式采样策略的好处是。1）均匀生成的样本集A对任何搜索区域都没有偏见；2）xG很可能是一个有希望的区域，因为它是基于代理模型的一大批均匀点中最好的一个集合；3）xG在下一次迭代中可能对提高模型质量有用，因为它处于可用信息很少的区域。算法2中提供了GS的伪代码。</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220607171255351.png" alt="image-20220607171255351" style="zoom:50%;" />
+<p>在GS中，需要产生一大组样本来覆盖整个搜索空间。随机均匀抽样或者其他一些方法(如LHS)都可以用于这个目的。然而，我们的实验结果表明，采样策略对所提算法的性能并不关键。因此在实验中采用随机均匀抽样方法。</p>
+<h4 id="子区域搜索ss">子区域搜索SS</h4>
+<p>子区域模型在子区域内可以获得与全局模型相似的近似精度,子区域模型可以像全局模型一样指导ΩS中的优化工作。通过子区域划分，计算资源可以得到合理的分配。</p>
+<p>在中等水平上，由当前数据库D的一个子集DS构建的子区域RBF模型SS(x)被用来开发相应的有希望的子区域。</p>
+<p>本文采用了<strong>模糊c均值聚类(fuzzy c-means algorithm, FCM)</strong>.它通过优化目标函数得到每个样本点对所有类中心的隶属度，从而决定样本点的类属以达到自动对样本数据进行分类的目的</p>
+<p>首先，为了确定聚类的数量，采用了两个控制参数L1和L2。L1表示每个簇的最大点数，L2表示再增加一个所要的点的数量。基于L1和L2，聚类的数量计算如下(9)</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>c</mi><mo>=</mo><mn>1</mn><mo>+</mo><mi>max</mi><mo>⁡</mo><mrow><mo fence="true">{</mo><mn>0</mn><mo separator="true">,</mo><mrow><mo fence="true">[</mo><mfrac><mrow><mi>N</mi><mo>−</mo><msub><mi>L</mi><mn>1</mn></msub></mrow><msub><mi>L</mi><mn>2</mn></msub></mfrac><mo fence="true">⌉</mo></mrow><mo fence="true">}</mo></mrow></mrow><annotation encoding="application/x-tex">c=1+\max \left\{0,\left[\frac{N-L_{1}}{L_{2}}\right\rceil\right\}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.43056em;vertical-align:0em;"></span><span class="mord mathdefault">c</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.72777em;vertical-align:-0.08333em;"></span><span class="mord">1</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">+</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:2.40003em;vertical-align:-0.95003em;"></span><span class="mop">max</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">{</span></span><span class="mord">0</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">[</span></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.36033em;"><span style="top:-2.3139999999999996em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathdefault">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">2</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.10903em;">N</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord mathdefault">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8360000000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">⌉</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size3">}</span></span></span></span></span></span></span></p>
+<p>其中N是先前评估的点的数量。如果N≤L1，c=1就意味着所有样本都被归入同一个聚类，即D<sub>S</sub>=D。如果N&gt;L1，那么N个点通过模糊c-means聚类被分成c个聚类。每个聚类Cj, j = 1, 2,...,c 包括对自身具有最高成员度的L1点。此外，当N&gt;L1和L1&gt;L2时，由于c-L1&gt;N，不同的聚类共享一些共同点。</p>
+<p>聚类后，用一个聚类中所包含的点的平均目标函数值来代表这个聚类的质量，其计算公式为(10)</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><msub><mi>Q</mi><mi>j</mi></msub><mo>=</mo><mfrac><mrow><munder><mo>∑</mo><mrow><mi mathvariant="bold">x</mi><mo>∈</mo><msub><mi mathvariant="bold">C</mi><mi>j</mi></msub></mrow></munder><mi>f</mi><mo>(</mo><mi mathvariant="bold">x</mi><mo>)</mo></mrow><msub><mi>L</mi><mn>1</mn></msub></mfrac><mo separator="true">,</mo><mspace width="1em"/><mi>j</mi><mo>=</mo><mn>1</mn><mo separator="true">,</mo><mn>2</mn><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mi>c</mi></mrow><annotation encoding="application/x-tex">Q_{j}=\frac{\sum_{\mathbf{x} \in \mathbf{C}_{j}} f(\mathbf{x})}{L_{1}}, \quad j=1,2, \ldots, c
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.969438em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathdefault">Q</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.47303em;vertical-align:-0.8360000000000001em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.63703em;"><span style="top:-2.3139999999999996em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathdefault">L</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.30110799999999993em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.8870299999999998em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mop"><span class="mop op-symbol small-op" style="position:relative;top:-0.0000050000000000050004em;">∑</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.18056699999999998em;"><span style="top:-2.40029em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathbf mtight">x</span></span><span class="mrel mtight">∈</span><span class="mord mtight"><span class="mord mtight"><span class="mord mathbf mtight">C</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3280857142857143em;"><span style="top:-2.357em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.2818857142857143em;"><span></span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.49703em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault" style="margin-right:0.10764em;">f</span><span class="mopen">(</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mclose">)</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.8360000000000001em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mspace" style="margin-right:1em;"></span><span class="mord mathdefault" style="margin-right:0.05724em;">j</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8388800000000001em;vertical-align:-0.19444em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault">c</span></span></span></span></span></p>
+<p>然后，根据集群的质量Q，以升序进行排序，接着将每个集群的等级分配为r<sub>j</sub> = c - I<sub>j</sub> + 1 . Ij是排序后第j个簇的索引</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><msub><mi>p</mi><mi>j</mi></msub><mo>=</mo><mfrac><msub><mi>r</mi><mi>j</mi></msub><mi>c</mi></mfrac><mo separator="true">,</mo><mspace width="1em"/><mi>j</mi><mo>=</mo><mn>1</mn><mo separator="true">,</mo><mn>2</mn><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><mi>c</mi></mrow><annotation encoding="application/x-tex">p_{j}=\frac{r_{j}}{c}, \quad j=1,2, \ldots, c
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.716668em;vertical-align:-0.286108em;"></span><span class="mord"><span class="mord mathdefault">p</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:0em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.7935599999999998em;vertical-align:-0.686em;"></span><span class="mord"><span class="mopen nulldelimiter"></span><span class="mfrac"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.1075599999999999em;"><span style="top:-2.314em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord mathdefault">c</span></span></span><span style="top:-3.23em;"><span class="pstrut" style="height:3em;"></span><span class="frac-line" style="border-bottom-width:0.04em;"></span></span><span style="top:-3.677em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord"><span class="mord mathdefault" style="margin-right:0.02778em;">r</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.311664em;"><span style="top:-2.5500000000000003em;margin-left:-0.02778em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.05724em;">j</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.286108em;"><span></span></span></span></span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.686em;"><span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mspace" style="margin-right:1em;"></span><span class="mord mathdefault" style="margin-right:0.05724em;">j</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:0.8388800000000001em;vertical-align:-0.19444em;"></span><span class="mord">1</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord">2</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault">c</span></span></span></span></span></p>
+<p>最后，可以根据选择概率pj选择一个集群来确定子集D<sub>S</sub>。然后，可以使用子集DS来训练一个子区域RBF模型SS(x)。最后，填充采样策略被定义为(13)</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><msup><mi mathvariant="bold">x</mi><mi>S</mi></msup><mo>=</mo><munder><mo><mi>arg</mi><mo>⁡</mo><mi>min</mi><mo>⁡</mo></mo><mrow><mi mathvariant="bold">x</mi><mo>∈</mo><msub><mi mathvariant="normal">Ω</mi><mi>S</mi></msub></mrow></munder><msub><mi>S</mi><mi>S</mi></msub><mo>(</mo><mi mathvariant="bold">x</mi><mo>)</mo></mrow><annotation encoding="application/x-tex">\mathbf{x}^{S} =\underset{\mathbf{x} \in \Omega_{S}}{\arg \min } S_{S}(\mathbf{x})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8913309999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913309999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.05764em;">S</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.7890759999999999em;vertical-align:-1.0390759999999999em;"></span><span class="mord"><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6678600000000001em;"><span style="top:-1.8612290000000002em;margin-left:0em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathbf mtight">x</span></span><span class="mrel mtight">∈</span><span class="mord mtight"><span class="mord mtight">Ω</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567071428571427em;margin-left:0em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.05764em;">S</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.14329285714285717em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-2.7em;"><span class="pstrut" style="height:2.7em;"></span><span><span class="mop"><span class="mop">ar<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.0390759999999999em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.05764em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.05764em;">S</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mclose">)</span></span></span></span></span></p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220607174857626.png" alt="image-20220607174857626" style="zoom: 67%;" />
+<p>如果解决方案xS过于接近先前评估的点(不满足19行)，xS将被直接删除。</p>
+<p>综上所述，SS的优点有以下几点。1）模糊聚类能够将整个搜索空间分割成多个重叠的平衡子区域，这样可以提高边界区域的近似精度；2）更好的子区域具有更高的利用概率，这自然能够导致探索和利用之间的良好平衡；3）下一个代理模型的xS周围的近似质量将得到改善，这为在接下来的迭代中利用xS周围的区域带来机会。</p>
+<p>初步的实验结果表明，模糊c-means聚类总是比k-means聚类好。原因可能是模糊c-means聚类比k-means聚类能将整个搜索空间划分为更均衡的子区域，而且模糊c-means聚类得到的重叠结构能更有效地利用现有数据</p>
+<h4 id="局部搜索ls">局部搜索LS</h4>
+<p>LS专注于利用当前最佳解xb周围最有希望的局部区域，其目的是完善迄今为止发现的最佳解。为此，应首先确定xb周围的一组局部训练点D<sub>L</sub>。本文采用KNN方法来确定D<sub>L</sub>，即</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><msub><mi mathvariant="bold">D</mi><mi>L</mi></msub><mo>=</mo><mrow><mo fence="true">(</mo><msub><mi mathvariant="bold">x</mi><mi>b</mi></msub><mo separator="true">,</mo><mi>f</mi><mrow><mo fence="true">(</mo><msub><mi mathvariant="bold">x</mi><mi>b</mi></msub><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow><mo>∪</mo><mrow><mo fence="true">(</mo><msubsup><mi mathvariant="bold">x</mi><mi>i</mi><mi>n</mi></msubsup><mo separator="true">,</mo><mi>f</mi><mrow><mo fence="true">(</mo><msubsup><mi mathvariant="bold">x</mi><mi>i</mi><mi>n</mi></msubsup><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow></mrow><annotation encoding="application/x-tex">\mathbf{D}_{L}=\left(\mathbf{x}_{b}, f\left(\mathbf{x}_{b}\right)\right) \cup\left(\mathbf{x}_{i}^{n}, f\left(\mathbf{x}_{i}^{n}\right)\right)
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.83611em;vertical-align:-0.15em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">D</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">L</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">b</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault" style="margin-right:0.10764em;">f</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.33610799999999996em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">b</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∪</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span></span><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7143919999999999em;"><span style="top:-2.4530000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">n</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord mathdefault" style="margin-right:0.10764em;">f</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.7143919999999999em;"><span style="top:-2.4530000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">n</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.247em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span></span></span></span></span></p>
+<p>(x<sup>n</sup><sub>i</sub>,f(x<sup>n</sup><sub>i</sub>)), i = 1,2,...,k，是当前最佳解xb的k个最近的邻居</p>
+<p>在获得本地训练数据集D<sub>L</sub>后，建立一个本地RBF模型S<sub>L</sub>(x)。LS的目标是在相应的局部区域找到SL(x)的最优解，即</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><msup><mi mathvariant="bold">x</mi><mi>L</mi></msup><mo>=</mo><munder><mo><mi>arg</mi><mo>⁡</mo><mi>min</mi><mo>⁡</mo></mo><mrow><mi mathvariant="bold">x</mi><mo>∈</mo><msub><mi mathvariant="normal">Ω</mi><mi>L</mi></msub></mrow></munder><msub><mi>S</mi><mi>L</mi></msub><mo>(</mo><mi mathvariant="bold">x</mi><mo>)</mo></mrow><annotation encoding="application/x-tex">\mathbf{x}^{L} =\underset{\mathbf{x} \in \Omega_{L}}{\arg \min } S_{L}(\mathbf{x})
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:0.8913309999999999em;vertical-align:0em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8913309999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">L</span></span></span></span></span></span></span></span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.7890759999999999em;vertical-align:-1.0390759999999999em;"></span><span class="mord"><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.6678600000000001em;"><span style="top:-1.8612290000000002em;margin-left:0em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight"><span class="mord mathbf mtight">x</span></span><span class="mrel mtight">∈</span><span class="mord mtight"><span class="mord mtight">Ω</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.3448em;"><span style="top:-2.3567071428571427em;margin-left:0em;margin-right:0.07142857142857144em;"><span class="pstrut" style="height:2.5em;"></span><span class="sizing reset-size3 size1 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">L</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.14329285714285717em;"><span></span></span></span></span></span></span></span></span></span><span style="top:-2.7em;"><span class="pstrut" style="height:2.7em;"></span><span><span class="mop"><span class="mop">ar<span style="margin-right:0.01389em;">g</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mop">min</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.0390759999999999em;"><span></span></span></span></span></span></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.05764em;">S</span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.32833099999999993em;"><span style="top:-2.5500000000000003em;margin-left:-0.05764em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">L</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mopen">(</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mclose">)</span></span></span></span></span></p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220607205603638.png" alt="image-20220607205603638" style="zoom: 67%;" />
+<p>算法4中给出了LS的伪码。同样，只有在满足距离约束(第6行)的情况下，才能对得到的xL进行评估，其中ΔL也是一个小的正常数。</p>
+<p>在SS和LS中，采用ΔS和ΔL来保持解决方案的多样性。<strong>L应该小于S</strong></p>
+<h3 id="实验">实验</h3>
+<p>测试函数</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220608135353535.png" alt="image-20220608135353535" style="zoom:50%;" />
+<p>六种TLRBF的变体，包括三种单级变体和三种双级变体，即TLRBF-G、TLRBF-S和TLRBF-L，分别表示TLRBF只应用GS、SS和LS；TLRBF-GS、TLRBF-GL和TLRBFSL分别表示TLRBF进行GS和SS、GS和LS、SS和LS。</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220608135516270.png" alt="image-20220608135516270" style="zoom: 50%;" />
+<p>如表二所示，TLRBF明显优于所有单层变体和两层变体（TLRBF-GL和TLRBF-SL）</p>
+<p>SS在TLRBF中起着最重要的作用，因为TLRBF-S优于TLRBF-G和TLRBF-L，而且包括SS在内的变体（TLRBF、TLRBF-GS、TLRBF-S和TLRBF-SL）往往优于其他（TLRBF-G、TLRBF-L和TLRBF-GL）。原因可以解释为，单一的GS过度关注探索，而单一的LS主要关注开发，而SS能够在未开发区域的探索和有前景区域的开发之间获得相对平衡。</p>
+<p>每种成分都对TLRBF的性能做出了贡献，因为TLRBF优于其他任何组合</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220608140451389.png" alt="image-20220608140451389" style="zoom:80%;" />
+<p>上图显示了TLRBF及其变体在Ackley函数（d=2）上得到的50个解决方案的散点图。所有方法都从相同的初始样本开始。</p>
+<p>对于单级方法，TLRBF-G获得的解几乎覆盖了整个搜索空间，而对于TLRBF-S和TLRBF-L，它们的解覆盖了一些不包括全局最优的小子区域</p>
+<p>对于两级方法来说，TLRBF-GS和TLRBF-GL的解决方案的分布与TLRBF-G类似。然而，TLRBF-GS可以在SS的帮助下定位全局最优区域。对于TLRBF-SL来说，其解决方案集中在一个小的子区域。但是，他们并没有集中在全局最优区域。而对于TLRBF来说，其解决方案分散在比TLRBG-G、TLRBG-GS和TLRBF-GL更小的区域</p>
+<p>而TLRBF有更多的解决方案落入全局最优区域。从直观上看，TLRBF在定位全局最优方面比其他变体更好。</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220608141402069.png" alt="image-20220608141402069" style="zoom:80%;" />
+<p>上图绘制了GS、SS和LS在优化过程中产生的解决方案的质量，这三个代表性的函数（d = 10）。一般来说，我们可以发现，xS比xG好，xL比xS好。需要指出的是，尽管每次迭代的最佳解总是由LS产生的，但这并不意味着GS和SS是无用的，因为LS在没有GS和SS的帮助下表现得很差。</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220608141914237.png" alt="image-20220608141914237" style="zoom:80%;" />
+<p>为了研究GS、SS和LS对最佳解xb的改进有多少次贡献，在上图中统计了GS、SS和LS的平均调用次数，以及它们相应的成功调用次数。如图所示，GS的平均成功率（成功率指平均成功调用次数除以平均调用次数）小于SS，SS的平均成功率小于LS。</p>
+<p>这一现象也说明了。1）GS负责探索整个搜索空间，所以很难直接改进xb；2）SS侧重于利用一些有希望的子区域，所以相对来说更容易找到比xb更好的解决方案；3）LS负责利用目前找到的最佳解决方案的邻域，所以最容易对xb进行改进。</p>
+<h3 id="总结">总结</h3>
+<p>在这篇文章中，我们提出了一种TLRBF辅助的算法，用于解决昂贵的优化问题。它由GS、SS和LS组成。GS是寻找未开发的和有希望的子区域，SS是识别最有希望的子区域，而LS则是利用目前发现的最佳局部区域。TLRBF处理黑匣子昂贵的优化问题的性能已经被一些数值实验所验证。实验结果证实了我们的设计原则，即GS、SS和LS相互补充，它们的合作可以在有限的函数评估数量内保持探索和利用之间的良好平衡。</p>
+<p>如何自适应地将函数评估分配给GS、SS和LS是我们未来工作中的一个重要研究问题。此外，我们将研究模型层的数量与问题复杂性和维度之间的相关性，并探索使用三层以上的模型是否能进一步改善我们的方法。我们还计划使用我们提出的方法来解决一些现实世界中昂贵的优化问题</p>
+]]></content>
+    </entry>
+    <entry>
+        <title type="html"><![CDATA[代理辅助的进化算法]]></title>
+        <id>https://LyntNy4n.github.io/post/saea_intro/</id>
+        <link href="https://LyntNy4n.github.io/post/saea_intro/">
+        </link>
+        <updated>2023-03-26T08:23:00.000Z</updated>
+        <summary type="html"><![CDATA[<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css" integrity="sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js" integrity="sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+<p><strong>surrogate-assisted evolutionary algorithm, SAEA</strong> 也叫数据驱动的进化优化算法,因为代理模型需要真实数据去更新</p>
+]]></summary>
+        <content type="html"><![CDATA[<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css" integrity="sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js" integrity="sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+<p><strong>surrogate-assisted evolutionary algorithm, SAEA</strong> 也叫数据驱动的进化优化算法,因为代理模型需要真实数据去更新</p>
+<!-- more -->
+<p>使用高效的代理模型或元模型来近似进化算法(EA)中的适应度函数，是解决计算代价高昂的优化问题的有效且流行的方法</p>
+<p><strong>昂贵优化问题(Expensive Optimization Problem, EOP)</strong>,指适应值评估昂贵(耗时)的优化问题</p>
+<p>在许多工程优化问题中,需要昂贵(耗时)的计算或物理模拟来评估候选解决方案的质量.传统的数学优化方法不能直接用于解决这些问题,因为这些问题的分析表达式是不存在的.经典的进化算法也不适合昂贵的优化,因为它们往往需要大量的函数评估</p>
+<h3 id="代理模型">代理模型</h3>
+<p>与标准EA相比，SAEA引入了新的步骤或问题，包括代理模型的构建、代理模型和EA之间的交互以及一些候选解决方案的重新评估。构建步骤涉及构建或更新代理模型，交互涉及将代理模型纳入EA的机制，**重新评估指的是确定一些个体(候选解)，以在优化过程中通过真实适应度函数进行评估。<strong>交互和重新评估步骤在文献中也称为</strong>模型管理(Surrogate Management)**或进化控制。</p>
+<h4 id="分类">分类</h4>
+<p>代理模型分为两大类：绝对适应度模型，直接近似候选解的适应度函数值；相对适应度模型估计候选解的相对秩或偏好，而不是其适应度值。</p>
+<h4 id="构建">构建</h4>
+<p>应有一个数据库(DB)存储所有的解x和真实函数评估的适应度y,表示为DB = <span class="katex"><span class="katex-mathml"><math><semantics><mrow><msubsup><mrow><mo fence="true">{</mo><msup><mi mathvariant="bold">x</mi><mi>i</mi></msup><mo separator="true">,</mo><msup><mi>y</mi><mi>i</mi></msup><mo fence="true">}</mo></mrow><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mi>N</mi></msubsup></mrow><annotation encoding="application/x-tex">\left\{\mathbf{x}^{i}, y^{i}\right\}_{i=1}^{N}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.4809409999999998em;vertical-align:-0.39971em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size1">{</span></span><span class="mord"><span class="mord"><span class="mord mathbf">x</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.824664em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault" style="margin-right:0.03588em;">y</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.824664em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size1">}</span></span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.0812309999999998em;"><span style="top:-2.3002900000000004em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.3029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.10903em;">N</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.39971em;"><span></span></span></span></span></span></span></span></span></span> .其中N为样本数,一般要求大于变量维度D</p>
+<p>可以通过在不使用代理模型的情况下运行几代EA或通过应用一些采样策略(也称为<strong>实验设计, DOE</strong>),例如拉丁超立方体采样(LHS)</p>
+<p>代理模型可以根据数据库的样本点快速训练,其时间与真实函数评估的时间相比可以忽略不计.</p>
+<h4 id="用法">用法</h4>
+<p>预选和估计:在个体创建中使用代理模型称为预选，在评估中使用代理模式可称为解决方案的适应度(或相对适应度)估计</p>
+<h4 id="模型管理">模型管理</h4>
+<p>将代理模型与实际适应度函数一起使用，以防止错误收敛</p>
+<p>模型管理的方法分为:</p>
+<p><strong>基于个体</strong></p>
+<p>在每一代中重新评估一些个体,最直观的策略是根据代理模型的适应度预测选择最适合的个体</p>
+<p>另一方法是基于聚类技术,将种群分为几个组，然后在每个组中，重新评估离中心最近的个体</p>
+<p><strong>基于世代</strong></p>
+<p>全部个体以一个特定的频率重新评估一次</p>
+<p>在自适应的基于世代的控制中，一个世代是否被控制(重新评估)是根据模型的保真度决定的</p>
+<p>保真度 fidelity:能够很好地拟合真实适应度函数的模型就是高保真的</p>
+<p><strong>基于种群</strong></p>
+<p>多个子种群共同进化，每个子种群使用自己的代理进行适应性评估。允许个体从一个子群体迁移到另一个子群体</p>
+<h4 id="填充准则">填充准则</h4>
+<p><strong>如何从代理模型中选择合适的解来让真实函数评估</strong>在SAEA中叫<strong>填充/加点准则(infill criteria)</strong></p>
+<p>有如下考虑：</p>
+<ol>
+<li>尽可能少的加入点，这意味着优化尽可能少的循环次数；</li>
+<li>加入点对模型的增益最大化，这意味着我们必须充分考虑模型本身的特性，针对模型，有针对性的设计怎么加点和怎么利用加点后的数据集对模型加强训练</li>
+</ol>
+<p>两个大方向:</p>
+<ol>
+<li>
+<p>选择最有希望的点,也就是最小点(下面的MP准则)</p>
+</li>
+<li>
+<p>选择不确定性最高的点,偏探索</p>
+</li>
+</ol>
+<p><strong>不确定性怎么衡量</strong></p>
+<p>对于一个点:</p>
+<ul>
+<li>krg模型提供适应度(均值)估计和不确定性(方差)估计，这是适应度估计中不确定性的统计合理边界</li>
+<li>如果不是krg模型,也可以大致设置为与用于构建代理的最近数据样本的平均距离成反比</li>
+<li>基于距离的矩阵,评估现有样本点之间的距离,但在计算成本和高维空间的索引性能方面存在问题</li>
+</ul>
+<p>对于一个模型:</p>
+<ul>
+<li>重新评估后,把误差加起来取平均</li>
+<li>个体的真实适应度与代理预测的适应度之间的均方误差</li>
+</ul>
+<p><strong>一些准则:</strong></p>
+<h5 id="最小化预测-minimizing-the-prediction-criterion-mp">最小化预测 Minimizing the prediction criterion, MP</h5>
+<p>将每轮用EA得到的代理模型预测的最小点(最优点)作为加入点(即直接用代理模型的输出作为适应度)</p>
+<h5 id="期望改善-expected-improvement-ei">期望改善 Expected improvement, EI</h5>
+<p>最大化当前数据最小响应点(最小y值)与我们新寻找的x点的差值(最大化“改善”)。对于每个x点，通过一些数学操作，我们可以求出这个<strong>改善的期望</strong><br>
+具体来说，用改善的期望作为遗传算法的适应度。遗传算法得到的最优点就是加入点</p>
+<h5 id="概率改善-probability-of-improvement-pi">概率改善 Probability of improvement, PI</h5>
+<p>最大化我们新寻找的x点的响应小于当前数据最小点的概率</p>
+<p>同理，用概率作为遗传算法的适应度。遗传算法得到的最优点就是所加点</p>
+<p><strong>置信下限 Lower confidence bound, LCB</strong></p>
+<p>就是均值减上k倍标准差 u(x)-k*σ(x)</p>
+<p><strong>根据距离矩阵并行最小化预测 Parallel minimizing the prediction criterion with the distance function, DMP</strong></p>
+<p>Viana等人引入了一个固定距离来约束更新点。每个循环中的每个更新点的距离要大于给定值。该距离定义为0.1∗√ndim。ndim是测试问题的维数。用一个固定的距离来约束的平行最小化预测准则被称为MMP准则。以固定距离约束更新点的平行最小化预测准则被称为MMP准则。以固定距离约束更新点的平行改进概率被称为MPI准则。有固定距离约束的平行预期改进被称为MEI准则。实际更新点的影响范围与给定距离不一样。所以直接使用固定距离是不合理的。一个基于PEI的自适应距离约束被提出。该方法还使用了相关函数。</p>
+<p>距离矩阵</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>D</mi><mi>I</mi><mi>S</mi><mo>(</mo><mi>x</mi><mo separator="true">,</mo><msup><mi>x</mi><mrow><mi>a</mi><mi>d</mi><mi>d</mi></mrow></msup><mo>)</mo><mo>=</mo><mrow><mo fence="true">{</mo><mtable><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mn>1</mn><mspace width="1em"/><mi>R</mi><mo>(</mo><mi>x</mi><mo separator="true">,</mo><msup><mi>x</mi><mrow><mi>a</mi><mi>d</mi><mi>d</mi></mrow></msup><mo>)</mo><mo>&lt;</mo><mi>δ</mi></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="false"><mrow><mn>0</mn><mspace width="1em"/><mi>R</mi><mo>(</mo><mi>x</mi><mo separator="true">,</mo><msup><mi>x</mi><mrow><mi>a</mi><mi>d</mi><mi>d</mi></mrow></msup><mo>)</mo><mo>&gt;</mo><mi>δ</mi></mrow></mstyle></mtd></mtr></mtable></mrow></mrow><annotation encoding="application/x-tex">DIS(x,x^{add})= \left\{ \begin{matrix} 1 \quad R(x,x^{add})&lt; \delta \\ 0 \quad R(x,x^{add})&gt;\delta \\ \end{matrix} \right.
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1.149108em;vertical-align:-0.25em;"></span><span class="mord mathdefault" style="margin-right:0.02778em;">D</span><span class="mord mathdefault" style="margin-right:0.07847em;">I</span><span class="mord mathdefault" style="margin-right:0.05764em;">S</span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.8991079999999999em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">a</span><span class="mord mathdefault mtight">d</span><span class="mord mathdefault mtight">d</span></span></span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:2.418216em;vertical-align:-0.9591080000000003em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size3">{</span></span><span class="mord"><span class="mtable"><span class="col-align-c"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.4591079999999998em;"><span style="top:-3.61em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">1</span><span class="mspace" style="margin-right:1em;"></span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">a</span><span class="mord mathdefault mtight">d</span><span class="mord mathdefault mtight">d</span></span></span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&lt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord mathdefault" style="margin-right:0.03785em;">δ</span></span></span><span style="top:-2.4008919999999994em;"><span class="pstrut" style="height:3em;"></span><span class="mord"><span class="mord">0</span><span class="mspace" style="margin-right:1em;"></span><span class="mord mathdefault" style="margin-right:0.00773em;">R</span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.849108em;"><span style="top:-3.063em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">a</span><span class="mord mathdefault mtight">d</span><span class="mord mathdefault mtight">d</span></span></span></span></span></span></span></span></span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">&gt;</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mord mathdefault" style="margin-right:0.03785em;">δ</span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.9591080000000003em;"><span></span></span></span></span></span></span></span><span class="mclose nulldelimiter"></span></span></span></span></span></span></p>
+<p>R是相关性函数, δ是(0,1)的一个阈值</p>
+<p>距离函数不仅避免了候选解的集中，而且提高了全局搜索能力。因为超参数是各向异性的，所以距离函数在各个方向也是各向异性的</p>
+<p>第 q 个更新点标识为：</p>
+<p class='katex-block'><span class="katex-display"><span class="katex"><span class="katex-mathml"><math><semantics><mtable><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><msup><mi>x</mi><mrow><mo>(</mo><mi>n</mi><mo>+</mo><mi>q</mi><mo>)</mo></mrow></msup></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mi>max</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mi>D</mi><mi>M</mi><mi>P</mi><mrow><mo fence="true">(</mo><mi>x</mi><mo separator="true">,</mo><msup><mi>x</mi><mrow><mo>(</mo><mi>n</mi><mo>+</mo><mn>1</mn><mo>)</mo></mrow></msup><mo separator="true">,</mo><mo>…</mo><mo separator="true">,</mo><msup><mi>x</mi><mrow><mo>(</mo><mi>n</mi><mo>+</mo><mi>q</mi><mo>−</mo><mn>1</mn><mo>)</mo></mrow></msup><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow></mrow></mstyle></mtd></mtr><mtr><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow></mrow></mstyle></mtd><mtd><mstyle scriptlevel="0" displaystyle="true"><mrow><mrow></mrow><mo>=</mo><mi>max</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mi mathvariant="normal">MP</mi><mo>⁡</mo><mo>(</mo><mi>x</mi><mo>)</mo><mo>∗</mo><munderover><mo>∏</mo><mrow><mi>i</mi><mo>=</mo><mn>1</mn></mrow><mrow><mi>q</mi><mo>−</mo><mn>1</mn></mrow></munderover><mrow><mo fence="true">(</mo><mi mathvariant="normal">DIS</mi><mo>⁡</mo><mrow><mo fence="true">(</mo><mi>x</mi><mo separator="true">,</mo><msup><mi>x</mi><mrow><mo>(</mo><mi>n</mi><mo>+</mo><mi>q</mi><mo>−</mo><mn>1</mn><mo>)</mo></mrow></msup><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow><mo fence="true">)</mo></mrow></mrow></mstyle></mtd></mtr></mtable><annotation encoding="application/x-tex">\begin{aligned} x^{(n+q)} &amp;=\max \left(D M P\left(x, x^{(n+1)}, \ldots, x^{(n+q-1)}\right)\right) \\ &amp;=\max \left(\operatorname{MP}(x) * \prod_{i=1}^{q-1}\left(\operatorname{DIS}\left(x, x^{(n+q-1)}\right)\right)\right) \end{aligned}
+</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:5.52591em;vertical-align:-2.512955em;"></span><span class="mord"><span class="mtable"><span class="col-align-r"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:3.012955em;"><span style="top:-5.711176000000001em;"><span class="pstrut" style="height:3.8482210000000006em;"></span><span class="mord"><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.938em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathdefault mtight">n</span><span class="mbin mtight">+</span><span class="mord mathdefault mtight" style="margin-right:0.03588em;">q</span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span></span></span><span style="top:-2.912935000000001em;"><span class="pstrut" style="height:3.8482210000000006em;"></span><span class="mord"></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.512955em;"><span></span></span></span></span></span><span class="col-align-l"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:3.012955em;"><span style="top:-5.711176000000001em;"><span class="pstrut" style="height:3.8482210000000006em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mop">max</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord mathdefault" style="margin-right:0.02778em;">D</span><span class="mord mathdefault" style="margin-right:0.10903em;">M</span><span class="mord mathdefault" style="margin-right:0.13889em;">P</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.938em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathdefault mtight">n</span><span class="mbin mtight">+</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner">…</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.938em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathdefault mtight">n</span><span class="mbin mtight">+</span><span class="mord mathdefault mtight" style="margin-right:0.03588em;">q</span><span class="mbin mtight">−</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span></span></span><span style="top:-2.912935000000001em;"><span class="pstrut" style="height:3.8482210000000006em;"></span><span class="mord"><span class="mord"></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mop">max</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size4">(</span></span><span class="mop"><span class="mord mathrm">M</span><span class="mord mathrm">P</span></span><span class="mopen">(</span><span class="mord mathdefault">x</span><span class="mclose">)</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">∗</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mop op-limits"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:1.8482210000000003em;"><span style="top:-1.872331em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span><span class="mrel mtight">=</span><span class="mord mtight">1</span></span></span></span><span style="top:-3.050005em;"><span class="pstrut" style="height:3.05em;"></span><span><span class="mop op-symbol large-op">∏</span></span></span><span style="top:-4.347113em;margin-left:0em;"><span class="pstrut" style="height:3.05em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight" style="margin-right:0.03588em;">q</span><span class="mbin mtight">−</span><span class="mord mtight">1</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:1.277669em;"><span></span></span></span></span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mop"><span class="mord mathrm">D</span><span class="mord mathrm">I</span><span class="mord mathrm">S</span></span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;"><span class="delimsizing size2">(</span></span><span class="mord mathdefault">x</span><span class="mpunct">,</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="mord"><span class="mord mathdefault">x</span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.938em;"><span style="top:-3.113em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mopen mtight">(</span><span class="mord mathdefault mtight">n</span><span class="mbin mtight">+</span><span class="mord mathdefault mtight" style="margin-right:0.03588em;">q</span><span class="mbin mtight">−</span><span class="mord mtight">1</span><span class="mclose mtight">)</span></span></span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size2">)</span></span></span><span class="mclose delimcenter" style="top:0em;"><span class="delimsizing size4">)</span></span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:2.512955em;"><span></span></span></span></span></span></span></span></span></span></span></span></p>
+<h3 id="一些分类">一些分类</h3>
+<h4 id="离线在线">离线/在线</h4>
+<p>离线(offline)没有增量数据(incremental data),即代理模型产生出的解不能送给真实函数评估从而反馈给代理模型</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220808142919538.png" alt="image-20220808142919538" style="zoom:80%;" />
+<p>这样会导致数据不平衡,量不够多,模型可靠性不高</p>
+<p>一些解决手段:</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20221025134307737.png" alt="image-20221025134307737" style="zoom:50%;" />
+<p>在线(online)则可以</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20221025134239089.png" alt="image-20221025134239089" style="zoom: 50%;" />
+<h4 id="相对适应度的代理模型">相对适应度的代理模型</h4>
+<p>在一些实际问题中，例如适应度由人给出的交互式优化问题，解的质量很难用数值来估计，通常通过相对排序来获取。在这种情况下，只有预测候选解决方案的偏好或排名的代理模型是合适的。因此，使用代理模型来预测绝对适应值或相对适应值是选择代理模型的一个重要标准。此外，相对适应度模型定义了一种新型的替代品，可以帮助EA解决昂贵的问题。它还引入了一系列新的模型管理策略，这些策略不同于用于绝对适应度模型的策略。因此，代理模型估计绝对适应度还是相对适应度是广泛影响SAEA设计的一个重要考虑因素。</p>
+<h2 id="各模型简介">各模型简介</h2>
+<h5 id="高斯过程gpkriging克里金模型">高斯过程(GP),<a href="./Kriging.md">Kriging(克里金)模型</a></h5>
+<p>常用,擅长局部,精度不错</p>
+<p>它还能给出预测的不确定性,其他模型一般都不行</p>
+<p>但是时间复杂度高(O(n<sup>3</sup>)左右),决策空间维数&gt;30时很耗时</p>
+<p>对噪声数据敏感</p>
+<h5 id="径向基函数-rbf"><a href="./%E5%8D%95%E7%9B%AE%E6%A0%87/TLRBF.md">径向基函数 RBF</a></h5>
+<p>常用,比较均衡,高维问题表现不错,而且时间复杂度低,理解容易</p>
+<h5 id="多项式回归-pr">多项式回归 PR</h5>
+<p>适合低维非线性问题中的局部建模，仅用于预测小范围内的适应度</p>
+<h5 id="响应面法rsm">响应面法(RSM)</h5>
+<p>很快,但只在低维(&lt;10)时精度尚可</p>
+<p>长期以来一直以高效率用于具有可接受的精度水平的小型问题。然而，随着问题规模的扩大，如果函数是非线性的，它就会失去效率</p>
+<h5 id="支持向量机-svm">支持向量机 SVM</h5>
+<p>SVM 对于具有高度非线性的高维问题表现良好。近年来，SVM 也得到了发展，虽然最初的版本非常耗时，但最近的版本很快。然而，如文献中所讨论的，SVM 并不是很准确.在大多数使用 SVM 的问题中，变量的数量非常多。因此常用于高维比精度更重要的情况</p>
+<p>此外还有人工神经网络(ANN)</p>
+<h2 id="套路">套路</h2>
+<h5 id="多代理模型模型集合surrogate-ensemble">多代理模型/模型集合(Surrogate Ensemble)</h5>
+<ul>
+<li>基于相同或不同的数据集建立不同的代理模型</li>
+<li>新的代理的构建将考虑现有代理所做的预测误差，可以帮劣纠正现有的代理所犯的预测错误；所有的代理组成一个组合模型，以预测计算真实的适应值</li>
+<li>每个代理模型都对最优解进行预测，然后选择预测误差较小的代理模型，从而使集成模型可以随种群进化而不断调整，提升对全局最优区域的预测准确性</li>
+</ul>
+<p>多个代理模型也被用于利用 &quot;不确定性的诅咒&quot;和&quot;不确定性的祝福&quot;之间的平衡,通常借助于一个全局模型和一个局部模型.全局代理模型的目的是通过平滑掉局部优化点来捕捉适应度函数的分布情况,从而帮助优化者探索搜索空间.相比之下,局部模型是围绕当前种群发现的有希望的区域构建的,以利用适应度函数分布的局部细节.</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220808150337696.png" alt="image-20220808150337696" style="zoom:80%;" />
+<h5 id="不同的填充准则">不同的填充准则</h5>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220808150713785.png" alt="image-20220808150713785" style="zoom:67%;" />
+<h5 id="增加代理的数据">增加代理的数据</h5>
+<ul>
+<li>通过数据扰动，在原始数据上生成不同的数据集</li>
+<li>在现有代理有较大预测误差的地方生成数据，增加数据量</li>
+</ul>
+<h5 id="降低构造代理的计算成本">降低构造代理的计算成本</h5>
+<ul>
+<li>在优化的早期阶段使用粗代理(保真度较低)，并随着搜索的进行逐渐提高代理的质量</li>
+</ul>
+<h5 id="基于相关性的度量使用足够高保真度的代理">基于相关性的度量,使用足够高保真度的代理</h5>
+<ul>
+<li>使用由模型质量测量法选择的模型的SAEA的收敛性不如由保真度最高的模型辅助的SAEA好</li>
+<li>预选策略通过提高个体的质量来降低计算成本，并且可以确保优化收敛到真正的最优值。基于个体的进化控制不能保证优化过程的正确方向。因此，在大多数情况下，预选策略优于基于个体的进化控制。在某些情况下，特别是当模型足够准确以捕捉适应度函数的整体趋势时，使用基于个体的控制的 SAEA 可能比使用预选的 SAEA 表现得更好，因为前者可以比后者进化更多代。适应度函数评估是相同的。</li>
+</ul>
+<h2 id="综述">综述</h2>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220901145722858.png" alt="image-20220901145722858" style="zoom: 50%;" />
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220901145933321.png" alt="image-20220901145933321" style="zoom:67%;" />
+]]></content>
+    </entry>
+</feed>

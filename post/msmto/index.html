@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>MS-MTO介绍 | 乱up廿四</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://LyntNy4n.github.io/favicon.ico?v=1691120291339">
+<link rel="stylesheet" href="https://LyntNy4n.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1CGSPF718Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CGSPF718Q');
+</script>
+
+
+    <meta name="description" content="
+
+
+在常见的一些任务上惊人地强
+
+Multi-surrogate multi-tasking optimization of expensive problems(MS-MTO)
+昂贵问题的多代理多任务优化,论文建议训练两个代理模型,一个..." />
+    <meta name="keywords" content="SAEA,EA" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://LyntNy4n.github.io">
+        <img src="https://LyntNy4n.github.io/images/avatar.png?v=1691120291339" class="site-logo">
+        <h1 class="site-title">乱up廿四</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/LyntNy4n" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      LyntNy4n的垃圾场
+    </div>
+    <div class="site-footer">
+      114514 1919810 | <a class="rss" href="https://LyntNy4n.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">MS-MTO介绍</h2>
+            <div class="post-date">2023-04-12</div>
+            
+            <div class="post-content" v-pre>
+              <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.css" integrity="sha384-vKruj+a13U8yHIkAyGgK1J3ArTLzrFGBbBc0tDp4ad/EyewESeXE/Iv67Aj8gKZ0" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/katex.min.js" integrity="sha384-PwRUT/YqbnEjkZO0zZxNqcxACrXe+j766U2amXcgMg5457rve2Y7I6ZJSm2A0mS4" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.4/dist/contrib/auto-render.min.js" integrity="sha384-+VBxd3r6XgURycqtZ117nYw44OOcIax56Z4dCRWbxyPt0Koah1uHoK0o4+/RRE05" crossorigin="anonymous"
+    onload="renderMathInElement(document.body);"></script>
+<p>在常见的一些任务上惊人地强</p>
+<!-- more -->
+<h1 id="multi-surrogate-multi-tasking-optimization-of-expensive-problemsms-mto">Multi-surrogate multi-tasking optimization of expensive problems(MS-MTO)</h1>
+<p>昂贵问题的多代理多任务优化,论文建议训练两个代理模型,一个是使用所有可用数据训练的全局代理模型,另一个是只使用部分数据训练的局部代理模型</p>
+<p>所有使用真实目标函数评估的解都保存在一个<strong>存档/档案Arc</strong>中。然后,使用<strong>Arc中的所有数据将一个代理模型训练成全局模型(M<sub>g</sub>),以协助探索整个搜索空间。另一个代理模型在Arc中具有最佳适应度的样本上进行训练,成为一个局部代理模型(M<sub>l</sub>),以协助对局部区域的开发,这有望在一个有前途的子区域内近似原始函数。</strong></p>
+<p>**将全局和局部代理模型视为两个任务,将多代理模型引入MFEA.<strong>然而,我们不能保证两个不同的代理模型有相似的最优解,即使它们是在同一原始问题的数据上训练出来的。因此,这项工作采用了</strong>广义多因子进化算法(G-MFEA)**作为搜索方法,它能够更有效地解决最优解不在同一区域或搜索维度不同的多个任务。</p>
+<p>在MS-MTO中,探索和开发是通过同时优化全局和局部代理模型作为两个不同但相关的任务来进行的,这与传统SAEAs不同</p>
+<h3 id="算法流程">算法流程</h3>
+<p>代理模型使用RBF,激活函数是立方(cubic)函数 <span class="katex"><span class="katex-mathml"><math><semantics><mrow><mi>ϕ</mi><mrow><mo fence="true">(</mo><mrow><mo fence="true">∥</mo><mi mathvariant="bold">x</mi><mo>−</mo><msub><mi mathvariant="bold">c</mi><mi>i</mi></msub><mo fence="true">∥</mo></mrow><mo fence="true">)</mo></mrow><mo>=</mo><msup><mrow><mo fence="true">(</mo><mrow><mo fence="true">∥</mo><mi mathvariant="bold">x</mi><mo>−</mo><msub><mi mathvariant="bold">c</mi><mi>i</mi></msub><mo fence="true">∥</mo></mrow><mo fence="true">)</mo></mrow><mn>3</mn></msup></mrow><annotation encoding="application/x-tex">\phi\left(\left\|\mathbf{x}-\mathbf{c}_{i}\right\|\right)=\left(\left\|\mathbf{x}-\mathbf{c}_{i}\right\|\right)^{3}</annotation></semantics></math></span><span class="katex-html" aria-hidden="true"><span class="base"><span class="strut" style="height:1em;vertical-align:-0.25em;"></span><span class="mord mathdefault">ϕ</span><span class="mspace" style="margin-right:0.16666666666666666em;"></span><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">c</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="mspace" style="margin-right:0.2777777777777778em;"></span><span class="mrel">=</span><span class="mspace" style="margin-right:0.2777777777777778em;"></span></span><span class="base"><span class="strut" style="height:1.204008em;vertical-align:-0.25em;"></span><span class="minner"><span class="minner"><span class="mopen delimcenter" style="top:0em;">(</span><span class="minner"><span class="mopen delimcenter" style="top:0em;">∥</span><span class="mord"><span class="mord mathbf">x</span></span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mbin">−</span><span class="mspace" style="margin-right:0.2222222222222222em;"></span><span class="mord"><span class="mord"><span class="mord mathbf">c</span></span><span class="msupsub"><span class="vlist-t vlist-t2"><span class="vlist-r"><span class="vlist" style="height:0.31166399999999994em;"><span style="top:-2.5500000000000003em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mathdefault mtight">i</span></span></span></span></span><span class="vlist-s">​</span></span><span class="vlist-r"><span class="vlist" style="height:0.15em;"><span></span></span></span></span></span></span><span class="mclose delimcenter" style="top:0em;">∥</span></span><span class="mclose delimcenter" style="top:0em;">)</span></span><span class="msupsub"><span class="vlist-t"><span class="vlist-r"><span class="vlist" style="height:0.954008em;"><span style="top:-3.2029em;margin-right:0.05em;"><span class="pstrut" style="height:2.7em;"></span><span class="sizing reset-size6 size3 mtight"><span class="mord mtight"><span class="mord mtight">3</span></span></span></span></span></span></span></span></span></span></span></span> 	<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708135947883.png" alt="image-20220708135947883" style="zoom: 40%;" align="right"/></p>
+<ol>
+<li>
+<p>使用拉丁超立方体抽样(LHS)生成N<sub>I</sub>个解决方案,使用真实的目标函数进行评估这些解决方案,并保存在一个存档Arc中</p>
+</li>
+<li>
+<p>进行下面的循环,直到计算预算用尽,即达到允许的最大适应度评价数量:</p>
+</li>
+<li>
+<p>使用Arc中的所有数据训练一个全局代理模型(M<sub>g</sub>);使用Arc中具有最佳适应度(要排序)的样本上训练一个局部代理模型(M<sub>l</sub>)</p>
+</li>
+<li>
+<p>确定用在多任务优化上的交配概率(下面有提到)</p>
+</li>
+<li>
+<p>根据算法2(G-MFEA小改),找到两个代理模型的目前最优解</p>
+</li>
+<li>
+<p>使用真实的目标函数进行评估上面两个解,以便在下一轮更新两个RBF代理模型</p>
+</li>
+<li>
+<p>把这两个解保存到Arc</p>
+</li>
+</ol>
+<p>输出Arc的最好解</p>
+<p>Arc中的初始样本数量不应过大或过小。如果初始样本的数量太大,计算资源将被浪费,而如果数据太小,代理模型的质量将太差,无法发挥作用。因此,N<sub>I</sub>将被设定为训练局部代理模型所需的数据数量,假设训练局部代理模型所需的数据数量通常不超过训练全局模型的数据数量。</p>
+<h4 id="一个例子">一个例子</h4>
+<p><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708140640764.png" alt="image-20220708140640764" style="zoom: 80%;" />				<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708140652243.png" alt="image-20220708140652243" style="zoom: 80%;" /></p>
+<p>图1给出了一个说明性的例子,以显示本工作中全局和局部代理模型的贡献。假设在第t代的存档中有8个样本(图1(a)中的黑点)。所有这些样本都被用来训练全局代理模型M<sub>g</sub>(用蓝色虚线表示)。而局部代理模型M<sub>l</sub>(用粉色虚线表示)是用四个具有最佳适应度的样本来训练的。假设到目前为止发现的Mg和Ml的最佳解决方案分别是x1和x2</p>
+<p>那么这两个解决方案将使用真实的目标函数进行评估,并保存在档案中,以便在下一代更新两个代理模型Mg和Ml。图1(b)显示了在上一代评估了x1和x2后,在第t+1代更新的全局和局部代理模型.我们可以看到,全局代理模型Mg的最优解,表示为x3,现在更接近于实际目标问题的最优解,这是由之前的局部代理模型找到的解x2贡献的。在这个例子中,到目前为止在第t代发现的全局代理模型的最佳解并没有对局部代理模型的更新做出贡献,因为它不包括在局部代理模型的训练数据中。总之,更新后的本地代理模型可以更好地捕捉到真实目标函数的分布</p>
+<h4 id="交配概率交叉概率μ变异概率σ">交配概率(交叉概率μ,变异概率σ)</h4>
+<p>交配概率被用来平衡多任务优化中搜索的探索和利用。一个小的交配概率意味着强调对搜索空间有限区域的利用,一个大的交配概率将促进对整个搜索空间的探索。</p>
+<p>在所提出的MS-MTO方法的初始阶段,两个代理模型的最优解可能有很大差异,因为用于训练局部代理模型的数据分布在整个决策空间。因此,在第一阶段应使用小的交配概率来利用局部区域。</p>
+<p>随着评估找到的全局和局部代理模型的最优解,训练数据将会增加,可用于训练局部代理模型的数据将分布在搜索空间的一个子区域。因此,在这个子区域中,局部模型的分布将与全局模型的分布更加相似,使得搜索更有可能陷于局部最优。这时候我们建议扩大交配概率,以帮助摆脱局部最优。</p>
+<p>听起来像动态的rmp</p>
+<h5 id="交配概率选择">交配概率选择</h5>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708153745329.png" alt="image-20220708153745329" style="zoom:80%;" />
+<p>µ和σ分别代表交叉和变异的概率。µ1,σ1表示对于每个多任务优化,交叉(µ)和突变(σ)设置为1。µ1-10,σ1-10表示交叉和突变的概率从1变为10,其值=(MTO<sub>calls</sub>/10 + 1),其中MTO<sub>calls</sub>是迄今为止多任务优化的总调用数。从图4中,我们可以清楚地看到,<strong>交配概率线性增加</strong>的方法可以获得比其他交叉和变异概率固定的方法更好的性能。</p>
+<h4 id="全局和局部的多任务优化">全局和局部的多任务优化</h4>
+<p>全局和局部代理模型一起是否能更好地促进找到原始问题的最优解,取决于两个代理模型的分布,这又在很大程度上取决于训练数据集。多任务优化已被证明可以提高搜索性能,特别是当不同的任务在其适应度分布中具有相似的特征时。</p>
+<p>算法2给出了在两个代理模型上进行优化的多任务优化算法的伪代码。在这项工作中没有使用G-MFEA中提出的洗牌(shuffling)技术</p>
+<p>输入:全局代理模型M<sub>g</sub>,局部代理模型M<sub>l</sub>,最大迭代次数Kmax,交叉概率μ,变异概率σ</p>
+<p>输出:两个代理模型的最优解</p>
+<ol>
+<li>生成一个具有N<sub>P</sub>个体的初始种群P。注意这里有个<strong>历史数据选择策略</strong>,要从Arc中选一些历史解决方案放到初始种群中,用来帮助探索与当前最优解决方案所在区域不同的区域。<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708150222983.png" alt="image-20220708150222983" style="zoom: 55%;" align="right"/></li>
+<li>初始种群P中的所有个体将分别使用全局和局部代理模型进行评估</li>
+<li>计算种群中每个个体的技能因子(根据每个任务的因子排名来确定)</li>
+<li>当停止标准(达到预先定义的最大迭代次数)没有达到时,将重复以下步骤:</li>
+<li>每个个体通过<strong>决策变量翻译策略</strong>被映射到一个新的位置</li>
+<li>与MFEA类似,通过同种交配策略产生一个子代种群C</li>
+<li>子代种群C通过决策变量翻译策略翻译回去</li>
+<li>子代种群C中的每个个体将根据垂直文化传播被分配一个技能因子</li>
+<li>并在相应的任务(两个代理模型中的一个)上进行评估</li>
+<li>P和C拼接成中间种群R</li>
+<li>更新R中的标量适应度</li>
+<li>从R中选择下一代种群P</li>
+</ol>
+<p>输出两个代理模型的最优解</p>
+<h4 id="历史数据选择策略">历史数据选择策略</h4>
+<p>当多任务优化开始寻找两个任务的最优解,即更新的全局和局部代理模型时,首先会产生一个新的初始群体。为了找到比目前发现的计算成本高的问题的最佳解决方案,Arc中的一些历史解决方案将被包括在初始化群体中,这些解决方案已经使用真正昂贵的函数进行了评估。我们对历史数据的选择进行了五种不同的策略,即HD0、HD25、HD50、HD100和HD25-1。假设NP是种群规模,HD0、HD25、HD50和HD100分别表示初始种群的N<sub>P</sub>解决方案的0%、25%、50%和100%将从档案Arc中复制,其中的解决方案按升序排序(从好到坏)。也就是说,档案中最好的解决方案将被用于初始化部分群体。HD25-1与HD25不同,它首先从Arc档案中挑选出50%N<sub>P</sub>的最佳解(相当于HD50),然后随机选择这些解中的一半复制到初始种群中。这保证了初始种群总是包含迄今为止发现的最佳解决方案。</p>
+<img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/image-20220708153326792.png" alt="image-20220708153326792" style="zoom:80%;" />
+<p>初始群体中包含历史数据的方法的性能要比没有数据的方法好得多。此外,<strong>HD25-1相对稳定</strong>,可以分别获得比HD25、HD50和HD100更好的结果</p>
+<h4 id="决策变量翻译策略">决策变量翻译策略</h4>
+<p>决策变量翻译策略将个体的解映射到一个新的空间,其中所有任务的最优解都位于同一位置,可以在增强种群多样性和加速种群收敛之间保持更好的平衡</p>
+<p>详情去看G-MFEA论文.简单来说就是同种交配前把各决策变量加减一下,交配得到子代后,子代把自己的各决策变量加减回去</p>
+<h3 id="实验">实验</h3>
+<p>从所提出的MS-MTO算法的详细描述中,我们可以看出MS-MTO算法的性能主要依赖于三个部分：用于优化两个任务的初始群体P,即全局和局部代理模型；多任务算法优化两个任务的停止准则；交配概率。</p>
+<p>我们对30维Ellipsoid和Rastrigin问题进行了试验研究,这两个问题分别是单模态和多模态的,以确定合适的参数设置。然后,我们分析了所提算法的搜索动态和计算复杂性。接下来,为了考察多任务优化的贡献,我们还对12个分别具有10、20、30、50、100和200维的测试问题进行了比较研究。最后,我们提出的MS-MTO算法得到的实验结果将与最近提出的一些处理计算量大的问题的方法进行比较,包括CAL-SAPSO[40]、GORS-SLPSO[30]、SHPSO[38]、SA-COSO[37]、MGP-SLPSO[25]和SAMSO[31],以评价我们提出的方法在低维和高维问题上的性能。</p>
+<h3 id="总结">总结</h3>
+<p>使用代理技术解决计算成本高的问题仍然具有挑战性,特别是当维度变得很高时。本文提出构建一个全局和一个局部的代理,通过多任务优化方法一起解决这些问题。然后,在开始新一轮的多任务优化之前,使用真实的目标函数对发现的最优值进行评估,并将其添加到档案中,以更新全局和局部代理指标。此外,在优化过程中对多任务优化的交配概率进行调整,以控制知识转移的程度。实验结果表明,所提出的算法在低维和高维问题上都优于本工作中研究的最先进的算法。</p>
+<p>据我们所知,这是第一次尝试建立两个代理模型并使用进化多任务优化来搜索这两个代理模型。很容易想象,可以使用不同的训练数据训练更多的代理模型来进一步提高搜索效率,其中促进多个代理模型多样性的有效方法可能是至关重要的。此外,如何开发新的算法来寻找一个具有狭窄山谷的多模型问题的良好解决方案仍然是一项具有挑战性的任务。</p>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://LyntNy4n.github.io/tag/saea/" class="tag">
+                    SAEA
+                  </a>
+                
+                  <a href="https://LyntNy4n.github.io/tag/EA/" class="tag">
+                    EA
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://LyntNy4n.github.io/post/tlrbf/">
+                  <h3 class="post-title">
+                    TLRBF介绍
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+  <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  <script>
+    hljs.initHighlightingOnLoad()
+  </script>
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '193da042420864465789',
+        clientSecret: '36e16db48c1d62042f8e44a5155cf49bef58caa0',
+        repo: 'LyntNy4n.github.io',
+        owner: 'LyntNy4n',
+        admin: ['LyntNy4n'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>

@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" >
+
+<title>分布式缓存 simple groupcache 介绍篇 | 乱up廿四</title>
+
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.2/css/all.css" integrity="sha384-fnmOCqbTlWIlj8LyTjo7mOUStjsKC4pOpQbqyi7RrhN7udi9RwhKkMHpvLbHG9Sr" crossorigin="anonymous">
+<link rel="shortcut icon" href="https://LyntNy4n.github.io/favicon.ico?v=1691120291339">
+<link rel="stylesheet" href="https://LyntNy4n.github.io/styles/main.css">
+
+
+  
+    <link rel="stylesheet" href="https://unpkg.com/gitalk/dist/gitalk.css" />
+  
+
+  
+
+
+<link rel="stylesheet" href="https://unpkg.com/aos@next/dist/aos.css" />
+<script src="https://cdn.jsdelivr.net/npm/vue/dist/vue.js"></script>
+
+
+<script async src="https://www.googletagmanager.com/gtag/js?id=G-1CGSPF718Q"></script>
+<script>
+  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+
+  gtag('config', 'G-1CGSPF718Q');
+</script>
+
+
+    <meta name="description" content="本项目simple groupcache是groupcache的改版实现,为了简单起见,简化了一些模块的同时又增加了一些功能
+我们先实现简化后原版的功能,然后再去增加功能
+
+groupcache 简介
+groupcache 是一个基于Gol..." />
+    <meta name="keywords" content="Golang,通用编程" />
+  </head>
+  <body>
+    <div id="app" class="main">
+
+      <div class="sidebar" :class="{ 'full-height': menuVisible }">
+  <div class="top-container" data-aos="fade-right">
+    <div class="top-header-container">
+      <a class="site-title-container" href="https://LyntNy4n.github.io">
+        <img src="https://LyntNy4n.github.io/images/avatar.png?v=1691120291339" class="site-logo">
+        <h1 class="site-title">乱up廿四</h1>
+      </a>
+      <div class="menu-btn" @click="menuVisible = !menuVisible">
+        <div class="line"></div>
+      </div>
+    </div>
+    <div>
+      
+        
+          <a href="/" class="site-nav">
+            首页
+          </a>
+        
+      
+        
+          <a href="/archives" class="site-nav">
+            归档
+          </a>
+        
+      
+        
+          <a href="/tags" class="site-nav">
+            标签
+          </a>
+        
+      
+        
+          <a href="/post/about" class="site-nav">
+            关于
+          </a>
+        
+      
+    </div>
+  </div>
+  <div class="bottom-container" data-aos="flip-up" data-aos-offset="0">
+    <div class="social-container">
+      
+        
+          <a class="social-link" href="https://github.com/LyntNy4n" target="_blank">
+            <i class="fab fa-github"></i>
+          </a>
+        
+      
+        
+      
+        
+      
+        
+      
+        
+      
+    </div>
+    <div class="site-description">
+      LyntNy4n的垃圾场
+    </div>
+    <div class="site-footer">
+      114514 1919810 | <a class="rss" href="https://LyntNy4n.github.io/atom.xml" target="_blank">RSS</a>
+    </div>
+  </div>
+</div>
+
+
+      <div class="main-container">
+        <div class="content-container" data-aos="fade-up">
+          <div class="post-detail">
+            <h2 class="post-title">分布式缓存 simple groupcache 介绍篇</h2>
+            <div class="post-date">2023-08-03</div>
+            
+            <div class="post-content" v-pre>
+              <p>本项目simple groupcache是groupcache的改版实现,为了简单起见,简化了一些模块的同时又增加了一些功能</p>
+<p>我们先实现简化后原版的功能,然后再去增加功能</p>
+<!-- more -->
+<h2 id="groupcache-简介">groupcache 简介</h2>
+<p>groupcache 是一个基于Golang的小巧的 kv 存储库，最大的特点是<strong>没有设置/更新/删除内容的接口</strong>,带来的好处就是没有覆盖更新带来的一致性问题，但正因如此，这个库是有自己的特殊场景的，需要业务自己满足这种场景的使用(不频繁的更新,比如缓存一些静态文件，用文件 md5 作为 key，value 就是文件)</p>
+<p><strong>groupcache 没有更新和删除接口，那么空间岂不是会越来越多？</strong></p>
+<p>groupcache 没有 set，update，delete 接口只是让用户无法更新和删除已经缓存的内容而已，而不是说设置进去的 kv 要永久保存，缓存空间肯定不是无限的，groupcache 内部是通过 LRU 来管理内容</p>
+<p><strong>groupcache 没有 set 接口，那内容是怎么设置进去?</strong></p>
+<ol>
+<li>初始化的时候，就需要明确当 key miss 的时候，怎么获取到内容的手段，把这个手段配置好是前提</li>
+<li>get 调用的时候，当 key miss 的时候，就会调用初始化的获取手段来获取数据，如果 hit 的话，那么就直接返回</li>
+</ol>
+<h2 id="架构设计">架构设计</h2>
+<p>主要分为了 Group 模块，缓存模块，分布式⼀致性等模块</p>
+<h3 id="group模块">Group模块</h3>
+<p>groupcache 封装 <code>Group</code> 这个对象来对外提供服务，Group提供命名管理缓存/填充缓存的能力</p>
+<p>这个结构提供的函数就是对外使用的 API, 但没有更改/删除的接口</p>
+<h3 id="client-server">client &amp; server</h3>
+<p>groupcache 实现的库是 client 也是 server,即groupcache 实现的是一个分布式的无中心化的缓存集群。每个节点，既作为 server ，对外提供 api 访问，返回 key 的数据,也能作为客户端访问其他节点(去问其他节点有没有缓存数据)</p>
+<h3 id="缓存模块">缓存模块</h3>
+<p>缓存模块是数据实际存储的位置，其中实现缓存淘汰算法，过期机制，回调机制等，缓存模块与其他部分是解耦的，因此可以根据不同场景选择不同的缓存淘汰算法（默认lru）。<br>
+groupcache本身的实现中，缓存值只淘汰不更新，也没有超时淘汰机制，通过这样来简化设计，并没有指定缓存的移除操作。</p>
+<h3 id="byteview-模块">ByteView 模块</h3>
+<p>如果获取缓存值时直接返回缓存值的切⽚，那个切⽚只是原切⽚浅拷⻉，真正的缓存值就可能被外部恶意修改。所以⽤byteview进⾏⼀层封装，<strong>返回缓存值原切⽚的深拷⻉</strong></p>
+<h3 id="一致性哈希模块">⼀致性哈希模块</h3>
+<p>实现<strong>⼀致性哈希算法</strong>是从单节点走向分布式节点的一个重要的环节，其将机器节点组成哈希环，为每个节点提供了从其他节点获取缓存的能⼒</p>
+<p>一致性哈希算法: 在新增/删除节点时，只需要重新定位该节点附近的一小部分数据，而不需要重新定位所有的节点</p>
+<p>算法将 key 映射到 2<sup>32</sup> 的空间中，将这个数字首尾相连，形成一个环</p>
+<figure data-type="image" tabindex="1"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/bVbA7aH_W2xEX_1x_2n_Compressed_jpeg.webp" alt="bVbA7aH_W2xEX_1x_2n_Compressed_jpeg" loading="lazy"></figure>
+<p><strong>将对象和服务器都放置到同一个哈希环后，在哈希环上顺时针查找距离这个对象的 hash 值最近的机器，即是这个对象所属的机器</strong></p>
+<figure data-type="image" tabindex="2"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/bVbA7aI_W2xEX_1x_2n_Compressed_jpeg.webp" alt="bVbA7aI_W2xEX_1x_2n_Compressed_jpeg" loading="lazy"></figure>
+<p>增加一台服务器 cs4的情况下,只有 o3 对象需要重新分配</p>
+<p>如果使用简单的取模方法，当新添加服务器时可能会导致大部分缓存失效</p>
+<h3 id="防击穿模块">防击穿模块</h3>
+<p>一个 k-v 存储，客户端先看是否有 k 的缓存，如果有，那么直接给用户返回，如果没有，则向后端存储请求。</p>
+<p>如果突然来了1万个这样的请求，发现都是 miss，那么都去后端拉数据了，这种就可能会一下导致后端压力暴涨。其实，这种场景，只要第一个人发下去了就行了，其他的请求等着这个请求返回就好了，大家都是请求同一个值。</p>
+<p>内部实现了 <code>singlefilght</code> 就是解决这个问题的</p>
+<h3 id="协商填充本项目不实现">协商填充(本项目不实现)</h3>
+<p>固定的 key 由固定的节点服务，这个相当于一个绑定。举个例子，A，B，C 三个节点，如果请求发给了 A，节点 A 哈希计算发现这个请求应该是 B 节点执行，那么会转给 B 执行。这样只需要 B 节点把这个请求处理好即可，这样能防止在缓存 miss 的时候，整个系统节点的惊群效应。</p>
+<p>通过这种协商才能保证请求聚合发到 B，同一时间 B 收到大量相同 key 的请求，无论自己有没有，都能很好处理，因为有之前说的防击穿的措施：</p>
+<ul>
+<li>如果 B 有，立马返回就行；</li>
+<li>如果没有也只是放一个请求下去，后端压力可以很小的；</li>
+</ul>
+<h3 id="预热机制本项目不实现">预热机制(本项目不实现)</h3>
+<p>这个其实是和协商填充一起达到的效果，请求实现了节点绑定，那么在分布式集群的模式下，很容易实现预热的效果，你这个请求大概率是已经被其他节点缓存了的。</p>
+<h3 id="热点数据多节点备份本项目不实现">热点数据多节点备份(本项目不实现)</h3>
+<p>分布式缓存系统中，一般需要从两个层面考虑热点均衡的问题：</p>
+<ol>
+<li>大量的 key 是否均衡的分布到节点；这个指请求数量的分布均衡</li>
+<li>某些 key 的访问频率也是有热点的，也是不均衡的；</li>
+</ol>
+<p>针对第一点，不同节点会负责特定的 key 集合的查询请求，一般来讲只要哈希算法还行， key 的分布是均衡的，但是针对第二点，如果某些 key 属于热点数据而被大量访问，这很会导致压力全都在某个节点上。</p>
+<p>groupcache 有一个热点数据自动扩展机制用来解决这个问题，针对每个节点，除了会缓存本节点存在且大量访问的 key 之外，也会缓存那些不属于节点的（但是被频繁访问）的 key，缓存这些 key 的对象被称为 hotcache。</p>
+<p>协商机制和多节点备份这两个特性是 groupcache 的杀手级特性。</p>
+<h2 id="大致流程">大致流程</h2>
+<ol>
+<li>当 Group 模块接收到请求时，当前节点先到本地的主缓存中查找是否有⽬标值。</li>
+<li>如果没有再查看此节点的热点缓存中是否有，如果也没有，就需要到远程伙伴节点去获取</li>
+<li>通过⼀致性哈希计算该 key 的哈希值，找到哈希环上相应的节点，执⾏该节点的远程调⽤函数获取值，并把该值加⼊到当前节点的热点缓存中</li>
+<li>如果该key在哈希环中对应的就是当前节点，那么就需要从本地的数据源去获取数据后加载到当前节点的主缓存中</li>
+</ol>
+<figure data-type="image" tabindex="3"><img src="https://cdn.jsdelivr.net/gh/LyntNy4n/md_image@main/img/20210629234058250.png" alt="在这里插入图片描述" loading="lazy"></figure>
+
+            </div>
+            
+              <div class="tag-container">
+                
+                  <a href="https://LyntNy4n.github.io/tag/go/" class="tag">
+                    Golang
+                  </a>
+                
+                  <a href="https://LyntNy4n.github.io/tag/tech/" class="tag">
+                    通用编程
+                  </a>
+                
+              </div>
+            
+            
+              <div class="next-post">
+                <div class="next">下一篇</div>
+                <a href="https://LyntNy4n.github.io/post/sunday/">
+                  <h3 class="post-title">
+                    不会KMP也没关系,试试更简单更快的Sunday算法!
+                  </h3>
+                </a>
+              </div>
+            
+
+            
+              
+                <div id="gitalk-container" data-aos="fade-in"></div>
+              
+
+              
+            
+
+          </div>
+
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/aos@next/dist/aos.js"></script>
+<script type="application/javascript">
+
+AOS.init();
+
+var app = new Vue({
+  el: '#app',
+  data: {
+    menuVisible: false,
+  },
+})
+
+</script>
+
+
+  <script src="//cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.5.1/build/highlight.min.js"></script>
+  <script>
+    hljs.initHighlightingOnLoad()
+  </script>
+
+
+
+
+  
+    <script src="https://unpkg.com/gitalk/dist/gitalk.min.js"></script>
+    <script>
+
+      var gitalk = new Gitalk({
+        clientID: '193da042420864465789',
+        clientSecret: '36e16db48c1d62042f8e44a5155cf49bef58caa0',
+        repo: 'LyntNy4n.github.io',
+        owner: 'LyntNy4n',
+        admin: ['LyntNy4n'],
+        id: (location.pathname).substring(0, 49),      // Ensure uniqueness and length less than 50
+        distractionFreeMode: false  // Facebook-like distraction free mode
+      })
+
+      gitalk.render('gitalk-container')
+
+    </script>
+  
+
+  
+
+
+
+
+  </body>
+</html>
